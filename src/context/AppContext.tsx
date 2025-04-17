@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
 import { db, handleFirestoreError } from '../services/firebase';
-import { collection, getDocs, addDoc, updateDoc, doc, setDoc, query, limit, startAfter, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, setDoc, query, limit, startAfter, orderBy, serverTimestamp, deleteDoc } from 'firebase/firestore';
 
 interface AppContextType {
   owners: Owner[];
@@ -20,6 +20,7 @@ interface AppContextType {
   refreshData: () => Promise<void>;
   loadMore: (type: 'owners' | 'pets') => Promise<void>;
   hasMore: { owners: boolean; pets: boolean };
+  deletePet: (petId: string) => Promise<void>;
 }
 
 // Cache configuration
@@ -380,6 +381,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
 
+  const deletePet = async (petId: string) => {
+    try {
+      const petRef = doc(db, 'pets', petId);
+      await deleteDoc(petRef);
+      
+      // Update local state
+      setPets(prevPets => prevPets.filter(pet => pet.id !== petId));
+      
+      // Update cache if it exists
+      if (cachedData.current.pets) {
+        cachedData.current.pets = cachedData.current.pets.filter(pet => pet.id !== petId);
+      }
+    } catch (error) {
+      console.error('Error deleting pet:', error);
+      throw new Error('Failed to delete pet. Please try again.');
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -398,7 +417,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sendNotification,
         refreshData,
         loadMore,
-        hasMore
+        hasMore,
+        deletePet
       }}
     >
       {children}
