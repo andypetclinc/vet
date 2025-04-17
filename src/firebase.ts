@@ -8,7 +8,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyBkvgsWfGFX0XmDRFGcTrTWVgAqj3kvmUA",
     authDomain: "vet-app-58ab5.firebaseapp.com",
     projectId: "vet-app-58ab5",
-    storageBucket: "vet-app-58ab5.appspot.com",
+    storageBucket: "vet-app-58ab5.firebasestorage.app",
     messagingSenderId: "18920633034",
     appId: "1:18920633034:web:e6a4de927c9767e991ba33",
     measurementId: "G-T94P0K0BT6"
@@ -142,9 +142,8 @@ export const firebaseService = {
         const lastMonth = new Date(today);
         lastMonth.setMonth(today.getMonth() - 1);
         
-        // Sample pets with vaccinations
-        // Fixed to use a completely independent type
-        interface VaccinationData {
+        // Define explicit types for sample data
+        type SampleVaccination = {
           id: string;
           type: string;
           dateAdministered: string;
@@ -152,19 +151,20 @@ export const firebaseService = {
           reminderInterval: string;
           notes: string;
           reminderSent: boolean;
-        }
-
-        interface PetData {
+        };
+        
+        type SamplePet = {
           ownerId: string;
           name: string;
           species: string;
           breed: string;
           age: number;
           weight: number;
-          vaccinations: VaccinationData[];
-        }
+          vaccinations: SampleVaccination[];
+        };
         
-        const samplePets: PetData[] = [
+        // Sample pets with vaccinations
+        const samplePets: SamplePet[] = [
           {
             ownerId: ownerRefs[0].id,
             name: 'Max',
@@ -239,8 +239,7 @@ export const firebaseService = {
           const vaccinations = [...pet.vaccinations];
           
           // Create pet without vaccinations first
-          const petWithoutVaccinations = { ...pet };
-          delete (petWithoutVaccinations as any).vaccinations;
+          const { vaccinations: _, ...petWithoutVaccinations } = pet;
           
           // Add pet to Firestore
           const docRef = await addDoc(petsCollection, {
