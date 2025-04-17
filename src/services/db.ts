@@ -17,40 +17,63 @@ export const db = {
    * Check if database is initialized
    */
   isInitialized(): boolean {
-    return localStorage.getItem(INITIALIZED_KEY) === 'true';
+    try {
+      return localStorage.getItem(INITIALIZED_KEY) === 'true';
+    } catch (error) {
+      console.error('Error checking initialization status:', error);
+      return false;
+    }
   },
 
   /**
    * Mark database as initialized
    */
   markAsInitialized(): void {
-    localStorage.setItem(INITIALIZED_KEY, 'true');
+    try {
+      localStorage.setItem(INITIALIZED_KEY, 'true');
+    } catch (error) {
+      console.error('Error marking as initialized:', error);
+    }
   },
 
   /**
    * Load owners from localStorage
    */
   getOwners(): Owner[] {
-    // Auto-initialize if not initialized
-    if (!this.isInitialized()) {
-      this.initialize();
+    try {
+      // Auto-initialize if not initialized
+      if (!this.isInitialized()) {
+        console.log('Database not initialized, initializing now...');
+        this.initialize();
+      }
+      
+      const ownersData = localStorage.getItem(OWNERS_KEY);
+      console.log('Loaded owners data:', ownersData ? 'Data found' : 'No data');
+      return ownersData ? JSON.parse(ownersData) : [];
+    } catch (error) {
+      console.error('Error getting owners:', error);
+      return [];
     }
-    
-    const ownersData = localStorage.getItem(OWNERS_KEY);
-    return ownersData ? JSON.parse(ownersData) : [];
   },
 
   /**
    * Load pets from localStorage
    */
   getPets(): Pet[] {
-    // Auto-initialize if not initialized
-    if (!this.isInitialized()) {
-      this.initialize();
+    try {
+      // Auto-initialize if not initialized
+      if (!this.isInitialized()) {
+        console.log('Database not initialized, initializing now...');
+        this.initialize();
+      }
+      
+      const petsData = localStorage.getItem(PETS_KEY);
+      console.log('Loaded pets data:', petsData ? 'Data found' : 'No data');
+      return petsData ? JSON.parse(petsData) : [];
+    } catch (error) {
+      console.error('Error getting pets:', error);
+      return [];
     }
-    
-    const petsData = localStorage.getItem(PETS_KEY);
-    return petsData ? JSON.parse(petsData) : [];
   },
 
   /**
