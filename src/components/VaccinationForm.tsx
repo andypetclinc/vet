@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { VACCINATION_CONFIGS, VaccinationType, VaccinationConfig, ReminderInterval } from '../types';
+import { VACCINATION_CONFIGS, VaccinationType, VaccinationConfig } from '../types';
 
 interface VaccinationFormProps {
   petId: string;
+  onClose: () => void;
 }
 
-const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
+const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId, onClose }) => {
   const { addVaccination, pets } = useAppContext();
   const [type, setType] = useState<VaccinationType>('Anti-fleas');
   const [dateAdministered, setDateAdministered] = useState(
@@ -15,19 +16,18 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
   const [selectedInterval, setSelectedInterval] = useState('');
   const [nextDueDate, setNextDueDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [availableIntervals, setAvailableIntervals] = useState<ReminderInterval[]>(
-    VACCINATION_CONFIGS[0].reminderIntervals
-  );
+  const [availableIntervals, setAvailableIntervals] = useState(VACCINATION_CONFIGS[0].reminderIntervals);
 
-  // Initialize selected interval on component mount
+  // Initialize intervals when component mounts
   useEffect(() => {
-    // Set default selected interval to the first interval of the first vaccination type
-    if (VACCINATION_CONFIGS.length > 0 && VACCINATION_CONFIGS[0].reminderIntervals.length > 0) {
-      setSelectedInterval(VACCINATION_CONFIGS[0].reminderIntervals[0].id);
+    const config = VACCINATION_CONFIGS.find(config => config.name === type);
+    if (config) {
+      setAvailableIntervals(config.reminderIntervals);
+      setSelectedInterval(config.reminderIntervals[0].id);
     }
   }, []);
 
-  // Update available intervals when vaccination type changes
+  // Update intervals when vaccination type changes
   useEffect(() => {
     const config = VACCINATION_CONFIGS.find(config => config.name === type);
     if (config) {
@@ -36,32 +36,19 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
     }
   }, [type]);
 
-  // Calculate the next due date whenever date administered or selected interval changes
+  // Calculate next due date when date or interval changes
   useEffect(() => {
-    const calculatedDate = calculateNextDueDate();
-    setNextDueDate(calculatedDate);
-  }, [dateAdministered, selectedInterval]);
+    if (dateAdministered && selectedInterval) {
+      const interval = availableIntervals.find(i => i.id === selectedInterval);
+      if (interval) {
+        const date = new Date(dateAdministered);
+        date.setDate(date.getDate() + interval.days);
+        setNextDueDate(date.toISOString().split('T')[0]);
+      }
+    }
+  }, [dateAdministered, selectedInterval, availableIntervals]);
 
-  const calculateNextDueDate = (): string => {
-    const interval = availableIntervals.find(
-      interval => interval.id === selectedInterval
-    );
-    
-    if (!interval) return '';
-    
-    const date = new Date(dateAdministered);
-    date.setDate(date.getDate() + interval.days);
-    return date.toISOString().split('T')[0];
-  };
-
-  const getIntervalLabel = (): string => {
-    const interval = availableIntervals.find(
-      interval => interval.id === selectedInterval
-    );
-    return interval ? interval.label : '';
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedInterval) {
@@ -74,21 +61,35 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
       return;
     }
 
-    addVaccination({
+    const interval = availableIntervals.find(i => i.id === selectedInterval);
+    if (!interval) {
+      alert('Invalid interval selected');
+      return;
+    }
+
+    // Create vaccination data with the correct interval format
+    const vaccinationData = {
       petId,
       type,
       dateAdministered,
       nextDueDate,
-      notes,
-      reminderInterval: getIntervalLabel()
-    });
+      notes: notes || undefined,
+      reminderInterval: interval.label,
+      selectedInterval: interval.id
+    };
+
+    try {
+      await addVaccination(vaccinationData);
+      // Close the form after successful submission
+      onClose();
+    } catch (error) {
+      console.error('Failed to add vaccination:', error);
+    }
 
     // Reset form
     setType('Anti-fleas');
     setDateAdministered(new Date().toISOString().split('T')[0]);
-    setSelectedInterval(VACCINATION_CONFIGS[0].reminderIntervals[0].id);
     setNotes('');
-    // nextDueDate will be updated by the useEffect
   };
 
   // Find the pet name for display
@@ -97,7 +98,15 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
 
   return (
     <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4">Add Vaccination for {petName}</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Add Vaccination for {petName}</h2>
+        <button
+          onClick={onClose}
+          className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        >
+          Back to Dashboard
+        </button>
+      </div>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="vaccinationType">
@@ -144,7 +153,7 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
             onChange={(e) => setSelectedInterval(e.target.value)}
             required
           >
-            {availableIntervals.map((interval: ReminderInterval) => (
+            {availableIntervals.map((interval) => (
               <option key={interval.id} value={interval.id}>
                 {interval.label}
               </option>
@@ -181,12 +190,21 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
           />
         </div>
         
-        <button
-          type="submit"
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-        >
-          Record Vaccination
-        </button>
+        <div className="flex justify-between mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            Record Vaccination
+          </button>
+        </div>
       </form>
     </div>
   );

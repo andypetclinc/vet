@@ -1,8 +1,11 @@
 export interface Owner {
   id: string;
   name: string;
-  phoneNumber: string;
+  phone: string;
   email?: string;
+  address?: string;
+  notes?: string;
+  createdAt: Date;
 }
 
 export type PetType = 'Cat' | 'Dog';
@@ -43,7 +46,7 @@ export interface Vaccination {
   type: VaccinationType;
   dateAdministered: string;
   nextDueDate: string;
-  notes?: string;
+  notes?: string | null;
   reminderSent: boolean;
   selectedInterval: string;
 }

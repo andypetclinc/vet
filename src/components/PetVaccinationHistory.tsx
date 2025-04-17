@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import VaccinationForm from './VaccinationForm';
 
@@ -8,6 +8,7 @@ interface PetVaccinationHistoryProps {
 
 const PetVaccinationHistory: React.FC<PetVaccinationHistoryProps> = ({ petId }) => {
   const { getVaccinationsForPet, pets } = useAppContext();
+  const [showForm, setShowForm] = useState(true);
   
   const pet = pets.find(p => p.id === petId);
   if (!pet) {
@@ -62,6 +63,14 @@ const PetVaccinationHistory: React.FC<PetVaccinationHistoryProps> = ({ petId }) 
           <h2 className="text-xl font-semibold">
             Vaccination Records for {pet.name}
           </h2>
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            >
+              Add New Vaccination
+            </button>
+          )}
         </div>
         
         {vaccinations.length === 0 ? (
@@ -120,7 +129,12 @@ const PetVaccinationHistory: React.FC<PetVaccinationHistoryProps> = ({ petId }) 
         )}
       </div>
       
-      <VaccinationForm petId={petId} />
+      {showForm && (
+        <VaccinationForm 
+          petId={petId} 
+          onClose={() => setShowForm(false)} 
+        />
+      )}
     </div>
   );
 };

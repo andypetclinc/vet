@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAppContext } from '../context/AppContext';
+import { Pet } from '../types';
 import PetVaccinationHistory from './PetVaccinationHistory';
-import { db } from '../services/db';
 
 interface PetDetailsProps {
   petId: string;
@@ -9,95 +9,42 @@ interface PetDetailsProps {
 }
 
 const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
-  const { pets, owners, refreshData } = useAppContext();
-  const [isDeleting, setIsDeleting] = useState(false);
-  
+  const { pets, owners } = useAppContext();
   const pet = pets.find(p => p.id === petId);
-  if (!pet) {
-    return (
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <p className="text-red-500">Pet not found</p>
-        <button
-          onClick={onClose}
-          className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-        >
-          Back
-        </button>
-      </div>
-    );
-  }
-  
-  const owner = owners.find(o => o.id === pet.ownerId);
-  
-  const handleDelete = async () => {
-    if (window.confirm(`Are you sure you want to delete ${pet.name}? This will also remove all vaccination records.`)) {
-      setIsDeleting(true);
-      try {
-        // Await the Promise and check its result
-        const success = await db.deletePet(petId);
-        if (success) {
-          await refreshData(); // Refresh context data after deletion
-          onClose();
-        } else {
-          throw new Error('Failed to delete pet');
-        }
-      } catch (error) {
-        console.error('Error deleting pet:', error);
-        setIsDeleting(false);
-      }
-    }
-  };
-  
+  const owner = owners.find(o => o.id === pet?.ownerId);
+
+  if (!pet) return null;
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Pet Details</h2>
-          <div className="space-x-2">
-            <button
-              onClick={onClose}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-            >
-              Back to List
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete Pet'}
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 max-w-4xl w-full my-8">
+        <div className="flex justify-between items-start mb-6">
+          <h2 className="text-2xl font-bold">{pet.name}</h2>
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+          >
+            Close
+          </button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Pet Information</h3>
-            <div className="space-y-2">
-              <p><span className="font-semibold">ID:</span> {pet.id}</p>
-              <p><span className="font-semibold">Name:</span> {pet.name}</p>
-              <p><span className="font-semibold">Type:</span> {pet.species}</p>
-              <p><span className="font-semibold">Breed:</span> {pet.breed}</p>
-              <p><span className="font-semibold">Age:</span> {pet.age} years</p>
-            </div>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="font-semibold mb-2">Pet Information</h3>
+            <p><strong>Species:</strong> {pet.species}</p>
+            <p><strong>Breed:</strong> {pet.breed}</p>
+            <p><strong>Age:</strong> {pet.age}</p>
           </div>
-          
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Owner Information</h3>
-            {owner ? (
-              <div className="space-y-2">
-                <p><span className="font-semibold">Name:</span> {owner.name}</p>
-                <p><span className="font-semibold">Phone:</span> {owner.phone}</p>
-                {owner.email && <p><span className="font-semibold">Email:</span> {owner.email}</p>}
-              </div>
-            ) : (
-              <p className="text-red-500">Owner not found</p>
-            )}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="font-semibold mb-2">Owner Information</h3>
+            <p><strong>Name:</strong> {owner?.name || 'Unknown'}</p>
+            <p><strong>Phone:</strong> {owner?.phone || 'N/A'}</p>
+            <p><strong>Email:</strong> {owner?.email || 'N/A'}</p>
           </div>
         </div>
+
+        <PetVaccinationHistory petId={petId} />
       </div>
-      
-      <PetVaccinationHistory petId={petId} />
     </div>
   );
 };

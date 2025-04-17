@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { PetType } from '../types';
 
@@ -11,6 +11,33 @@ const PetForm: React.FC = () => {
   const [weight, setWeight] = useState('');
   const [breed, setBreed] = useState('');
   const [ownerId, setOwnerId] = useState('');
+  const [ownerSearch, setOwnerSearch] = useState('');
+  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Filter owners based on search term
+  const filteredOwners = useMemo(() => {
+    if (!ownerSearch) return owners;
+    const searchTerm = ownerSearch.toLowerCase();
+    return owners.filter(owner => 
+      owner.name.toLowerCase().includes(searchTerm) ||
+      owner.phone.toLowerCase().includes(searchTerm)
+    );
+  }, [owners, ownerSearch]);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowOwnerDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +58,18 @@ const PetForm: React.FC = () => {
       setWeight('');
       setBreed('');
       setOwnerId('');
+      setOwnerSearch('');
     }
+  };
+
+  const handleOwnerSelect = (ownerId: string, ownerName: string) => {
+    setOwnerId(ownerId);
+    setOwnerSearch(ownerName);
+    setShowOwnerDropdown(false);
+  };
+
+  const toggleDropdown = () => {
+    setShowOwnerDropdown(!showOwnerDropdown);
   };
 
   return (
@@ -48,13 +86,12 @@ const PetForm: React.FC = () => {
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             value={id}
             onChange={(e) => setId(e.target.value)}
-            placeholder="Enter a unique pet ID"
             required
           />
         </div>
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="petName">
-            Pet Name
+            Name
           </label>
           <input
             id="petName"
@@ -66,11 +103,11 @@ const PetForm: React.FC = () => {
           />
         </div>
         <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="petType">
-            Pet Species
+          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="petSpecies">
+            Species
           </label>
           <select
-            id="petType"
+            id="petSpecies"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             value={species}
             onChange={(e) => setSpecies(e.target.value as PetType)}
@@ -78,6 +115,8 @@ const PetForm: React.FC = () => {
           >
             <option value="Dog">Dog</option>
             <option value="Cat">Cat</option>
+            <option value="Bird">Bird</option>
+            <option value="Other">Other</option>
           </select>
         </div>
         <div className="mb-4">
@@ -87,7 +126,6 @@ const PetForm: React.FC = () => {
           <input
             id="petAge"
             type="number"
-            min="0"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             value={age}
             onChange={(e) => setAge(e.target.value)}
@@ -96,12 +134,11 @@ const PetForm: React.FC = () => {
         </div>
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="petWeight">
-            Weight (lbs)
+            Weight (kg)
           </label>
           <input
             id="petWeight"
             type="number"
-            min="0"
             step="0.1"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             value={weight}
@@ -122,24 +159,40 @@ const PetForm: React.FC = () => {
             required
           />
         </div>
-        <div className="mb-4">
+        <div className="mb-4 relative" ref={dropdownRef}>
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="petOwner">
             Owner
           </label>
-          <select
-            id="petOwner"
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            value={ownerId}
-            onChange={(e) => setOwnerId(e.target.value)}
-            required
-          >
-            <option value="">Select Owner</option>
-            {owners.map((owner) => (
-              <option key={owner.id} value={owner.id}>
-                {owner.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              id="petOwner"
+              type="text"
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              value={ownerSearch}
+              onChange={(e) => setOwnerSearch(e.target.value)}
+              onClick={toggleDropdown}
+              placeholder="Click to search owner by name or phone"
+              required
+            />
+            {showOwnerDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto">
+                {filteredOwners.length === 0 ? (
+                  <div className="px-4 py-2 text-gray-500">No owners found</div>
+                ) : (
+                  filteredOwners.map((owner) => (
+                    <div
+                      key={owner.id}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => handleOwnerSelect(owner.id, owner.name)}
+                    >
+                      <div className="font-medium">{owner.name}</div>
+                      <div className="text-sm text-gray-500">{owner.phone}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <button
           type="submit"

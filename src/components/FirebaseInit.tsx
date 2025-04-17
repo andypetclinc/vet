@@ -1,35 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../services/db';
+import { db } from '../services/firebase';
+import { collection, getDocs, limit } from 'firebase/firestore';
 import LoadingSpinner from './LoadingSpinner';
 
 interface FirebaseInitProps {
   children: React.ReactNode;
 }
 
-/**
- * Component that initializes Firebase when the app starts
- * It runs the database initialization and handles loading/error states
- */
 const FirebaseInit: React.FC<FirebaseInitProps> = ({ children }) => {
-  const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const initializeFirebase = async () => {
+    // Firestore is already initialized in firebase.ts
+    // We just need to verify the connection
+    const verifyConnection = async () => {
       try {
-        // Initialize the database with sample data if needed
-        await db.initialize();
-        setIsInitialized(true);
+        // Try to get a document to verify connection
+        const testCollection = collection(db, 'test');
+        await getDocs(testCollection);
+        setIsLoading(false);
       } catch (err: any) {
-        console.error('Failed to initialize Firebase:', err);
-        setError(err.message || 'Failed to initialize Firebase');
-      } finally {
+        console.error('Firebase connection error:', err);
+        setError(err.message || 'Failed to connect to Firebase');
         setIsLoading(false);
       }
     };
 
-    initializeFirebase();
+    verifyConnection();
   }, []);
 
   if (isLoading) {
@@ -57,4 +55,4 @@ const FirebaseInit: React.FC<FirebaseInitProps> = ({ children }) => {
   return <>{children}</>;
 };
 
-export default FirebaseInit; 
+export default FirebaseInit;

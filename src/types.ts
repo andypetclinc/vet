@@ -78,8 +78,9 @@ export interface Vaccination {
   dateAdministered: string;  // ISO date string: YYYY-MM-DD
   nextDueDate: string;       // ISO date string: YYYY-MM-DD
   reminderInterval: string;  // Human readable interval like "1 year", "3 months"
-  notes?: string;
+  notes?: string | null;
   reminderSent: boolean;
+  selectedInterval: string;
 }
 
 // Notification interface for vaccination reminders

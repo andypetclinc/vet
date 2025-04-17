@@ -1,13 +1,14 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-import { db } from '../services/db';
+import { db, handleFirestoreError } from '../services/firebase';
+import { collection, getDocs, addDoc, updateDoc, doc, setDoc, query, limit, startAfter, orderBy, serverTimestamp } from 'firebase/firestore';
 
 interface AppContextType {
   owners: Owner[];
   pets: Pet[];
   loading: boolean;
   error: string | null;
-  addOwner: (owner: Omit<Owner, 'id'>) => Promise<void>;
+  addOwner: (owner: Omit<Owner, 'id' | 'createdAt'>) => Promise<void>;
   addPet: (pet: Omit<Pet, 'vaccinations'>) => Promise<void>;
   addVaccination: (vaccination: Omit<Vaccination, 'id' | 'reminderSent'>) => Promise<void>;
   getUpcomingVaccinations: (daysAhead: number) => Vaccination[];
@@ -17,7 +18,24 @@ interface AppContextType {
   setSearchTerm: (term: string) => void;
   sendNotification: (vaccination: Vaccination) => Promise<boolean>;
   refreshData: () => Promise<void>;
+  loadMore: (type: 'owners' | 'pets') => Promise<void>;
+  hasMore: { owners: boolean; pets: boolean };
 }
+
+// Cache configuration
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const PAGE_SIZE = 10; // Number of items per page
+
+type LoadType = 'owners' | 'pets' | 'all';
+
+// Add cache interface
+interface CacheData<T> {
+  data: T[];
+  timestamp: number;
+}
+
+// Initialize cache
+const ownersCache = new Map<string, CacheData<Owner>>();
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -28,34 +46,113 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isInitialized, setIsInitialized] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState({ owners: true, pets: true });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load initial data
-  const loadData = useCallback(async () => {
+  // Cache refs
+  const lastLoadTime = useRef<{ owners: number; pets: number }>({ owners: 0, pets: 0 });
+  const cachedData = useRef<{ owners: Owner[]; pets: Pet[] }>({ owners: [], pets: [] });
+  const lastDoc = useRef<{ owners: any; pets: any }>({ owners: null, pets: null });
+
+  // Load initial data with pagination
+  const loadData = useCallback(async (type: LoadType = 'all') => {
     setLoading(true);
     setError(null);
     try {
-      const ownersData = await db.getOwners();
-      const petsData = await db.getPets();
-      setOwners(ownersData);
-      setPets(petsData);
+      const now = Date.now();
+      
+      // Check cache first for initial load
+      if (type === 'all' && 
+          now - lastLoadTime.current.owners < CACHE_TTL && 
+          now - lastLoadTime.current.pets < CACHE_TTL) {
+        setOwners(cachedData.current.owners);
+        setPets(cachedData.current.pets);
+        setIsInitialized(true);
+        setLoading(false);
+        return;
+      }
+
+      if (type === 'owners' || type === 'all') {
+        const ownersQuery = query(
+          collection(db, 'owners'),
+          orderBy('name'),
+          limit(PAGE_SIZE),
+          ...(lastDoc.current.owners ? [startAfter(lastDoc.current.owners)] : [])
+        );
+
+        const ownersSnapshot = await getDocs(ownersQuery);
+        const newOwners = ownersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Owner[];
+
+        lastDoc.current.owners = ownersSnapshot.docs[ownersSnapshot.docs.length - 1];
+        setHasMore(prev => ({ ...prev, owners: ownersSnapshot.docs.length === PAGE_SIZE }));
+
+        if (type === 'all') {
+          cachedData.current.owners = newOwners;
+          lastLoadTime.current.owners = now;
+          setOwners(newOwners);
+        } else {
+          setOwners(prev => [...prev, ...newOwners]);
+        }
+      }
+
+      if (type === 'pets' || type === 'all') {
+        const petsQuery = query(
+          collection(db, 'pets'),
+          orderBy('name'),
+          limit(PAGE_SIZE),
+          ...(lastDoc.current.pets ? [startAfter(lastDoc.current.pets)] : [])
+        );
+
+        const petsSnapshot = await getDocs(petsQuery);
+        const newPets = petsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          vaccinations: doc.data().vaccinations || []
+        })) as Pet[];
+
+        lastDoc.current.pets = petsSnapshot.docs[petsSnapshot.docs.length - 1];
+        setHasMore(prev => ({ ...prev, pets: petsSnapshot.docs.length === PAGE_SIZE }));
+
+        if (type === 'all') {
+          cachedData.current.pets = newPets;
+          lastLoadTime.current.pets = now;
+          setPets(newPets);
+        } else {
+          setPets(prev => [...prev, ...newPets]);
+        }
+      }
+
       setIsInitialized(true);
     } catch (err: any) {
       console.error('Failed to load data:', err);
-      setError(err.message || 'Failed to load data');
+      setError(handleFirestoreError(err));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Load data on component mount
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Load more data
+  const loadMore = useCallback(async (type: 'owners' | 'pets') => {
+    if (!hasMore[type] || loading) return;
+    await loadData(type);
+  }, [hasMore, loading, loadData]);
 
   // Function to refresh data from the database
   const refreshData = async () => {
-    await loadData();
+    // Reset pagination
+    lastDoc.current = { owners: null, pets: null };
+    lastLoadTime.current = { owners: 0, pets: 0 };
+    setHasMore({ owners: true, pets: true });
+    await loadData('all');
   };
+
+  // Load data on component mount
+  useEffect(() => {
+    loadData('all');
+  }, [loadData]);
 
   // Check for vaccinations that need reminders
   useEffect(() => {
@@ -98,25 +195,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => clearInterval(interval);
   }, [isInitialized, pets]);
 
-  const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
-    setLoading(true);
-    setError(null);
+  const addOwner = async (ownerData: Omit<Owner, 'id' | 'createdAt'>): Promise<void> => {
     try {
-      const ownerId = await db.addOwner(ownerData);
+      // Create a new document reference
+      const ownerRef = doc(collection(db, 'owners'));
       
-      // Update state with the new owner including the ID from Firestore
-      const newOwner: Owner = {
+      // Create the owner object with ID and timestamp
+      const owner = {
+        id: ownerRef.id,
         ...ownerData,
-        id: ownerId
+        createdAt: serverTimestamp()
       };
-      
-      setOwners(prevOwners => [...prevOwners, newOwner]);
-    } catch (err: any) {
-      console.error('Failed to add owner:', err);
-      setError(err.message || 'Failed to add owner');
-      alert(`Failed to add owner: ${err.message || 'Unknown error'}`);
-    } finally {
-      setLoading(false);
+
+      // Add to Firestore
+      await setDoc(ownerRef, owner);
+
+      // Update local state
+      setOwners(prev => [...prev, owner]);
+
+      // Update cache
+      const cacheKey = 'owners';
+      const cachedData = ownersCache.get(cacheKey);
+      if (cachedData) {
+        ownersCache.set(cacheKey, {
+          ...cachedData,
+          data: [...cachedData.data, owner]
+        });
+      }
+    } catch (error) {
+      console.error('Error adding owner:', error);
+      throw new Error('Failed to add owner. Please try again.');
     }
   };
 
@@ -129,19 +237,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         vaccinations: []
       };
       
-      const petId = await db.addPet(petWithVaccinations);
+      const petsCollection = collection(db, 'pets');
+      const docRef = doc(petsCollection, petData.id);
+      await setDoc(docRef, petWithVaccinations);
       
-      // Update state with the new pet including the ID from Firestore
+      // Update state with the new pet using the ID from petData
       const newPet: Pet = {
         ...petWithVaccinations,
-        id: petId
+        id: petData.id
       };
       
       setPets(prevPets => [...prevPets, newPet]);
     } catch (err: any) {
       console.error('Failed to add pet:', err);
-      setError(err.message || 'Failed to add pet');
-      alert(`Failed to add pet: ${err.message || 'Unknown error'}`);
+      setError(handleFirestoreError(err));
+      alert(`Failed to add pet: ${handleFirestoreError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -151,29 +261,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setLoading(true);
     setError(null);
     try {
+      // Create a new vaccination object with proper handling of optional fields
       const newVaccination: Vaccination = {
         ...vaccinationData,
         id: `vacc-${Date.now()}`,
-        reminderSent: false
+        reminderSent: false,
+        notes: vaccinationData.notes || null,
+        selectedInterval: vaccinationData.selectedInterval || ''
       };
 
-      // Add to database
-      const success = await db.addVaccination(vaccinationData.petId, newVaccination);
+      // Update pet document with new vaccination
+      const petRef = doc(db, 'pets', vaccinationData.petId);
+      const pet = pets.find(p => p.id === vaccinationData.petId);
+      if (!pet) throw new Error('Pet not found');
+
+      const updatedVaccinations = [...(pet.vaccinations || []), newVaccination];
+      await updateDoc(petRef, { vaccinations: updatedVaccinations });
       
-      if (success) {
-        // Update state
-        setPets(prevPets => 
-          prevPets.map(pet => 
-            pet.id === vaccinationData.petId 
-              ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
-              : pet
-          )
-        );
-      }
+      // Update state
+      setPets(prevPets => 
+        prevPets.map(pet => 
+          pet.id === vaccinationData.petId 
+            ? { ...pet, vaccinations: updatedVaccinations }
+            : pet
+        )
+      );
     } catch (err: any) {
       console.error('Failed to add vaccination:', err);
-      setError(err.message || 'Failed to add vaccination');
-      alert(`Failed to add vaccination: ${err.message || 'Unknown error'}`);
+      const errorMessage = err.message || handleFirestoreError(err);
+      setError(errorMessage);
+      alert(`Failed to add vaccination: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -190,24 +307,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!vaccination) return;
       
       // Update in database
-      const success = await db.updateVaccination(petId, vaccinationId, { reminderSent: true });
+      const petRef = doc(db, 'pets', petId);
+      const updatedVaccinations = pet.vaccinations.map(vacc => 
+        vacc.id === vaccinationId ? { ...vacc, reminderSent: true } : vacc
+      );
       
-      if (success) {
-        // Update state
-        setPets(prevPets => 
-          prevPets.map(pet => ({
-            ...pet,
-            vaccinations: pet.vaccinations.map(vacc => 
-              vacc.id === vaccinationId 
-                ? { ...vacc, reminderSent: true }
-                : vacc
-            )
-          }))
-        );
-      }
+      await updateDoc(petRef, { vaccinations: updatedVaccinations });
+      
+      // Update state
+      setPets(prevPets => 
+        prevPets.map(pet => ({
+          ...pet,
+          vaccinations: pet.id === petId ? updatedVaccinations : pet.vaccinations
+        }))
+      );
     } catch (err: any) {
       console.error('Failed to update vaccination reminder:', err);
-      setError(err.message || 'Failed to update vaccination reminder');
+      setError(handleFirestoreError(err));
     }
   };
 
@@ -280,7 +396,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         searchTerm,
         setSearchTerm,
         sendNotification,
-        refreshData
+        refreshData,
+        loadMore,
+        hasMore
       }}
     >
       {children}

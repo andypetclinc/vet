@@ -17,7 +17,7 @@ const App: React.FC = () => {
           <div className="relative max-w-7xl mx-auto">
             <header className="text-center mb-8">
               <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-500">
-                Veterinary Clinic Management
+                Andy Pet Clinic
               </h1>
               <p className="mt-3 max-w-2xl mx-auto text-xl text-gray-500 sm:mt-4">
                 Manage pet owners, pets, and vaccination schedules with ease
