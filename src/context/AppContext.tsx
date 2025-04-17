@@ -1,6 +1,8 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-import { firebaseService } from '../firebase';
+import { fetchOwners, fetchPets, addOwner as fbAddOwner, addPet as fbAddPet, 
+  addVaccination as fbAddVaccination, updateVaccinationReminder as fbUpdateVaccinationReminder,
+  initializeSampleData } from '../firebase';
 
 interface AppContextType {
   owners: Owner[];
@@ -30,25 +32,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const loadData = async () => {
     console.log('Loading data from Firebase...');
     try {
-      // Initialize Firebase with sample data if empty
-      await firebaseService.initializeIfEmpty();
+      // Initialize sample data if needed
+      await initializeSampleData();
       
-      // Get owners
-      const ownersData = await firebaseService.getOwners();
-      console.log('Owners loaded:', ownersData.length);
+      // Fetch data
+      const ownersData = await fetchOwners();
+      const petsData = await fetchPets();
       
-      // Get pets
-      const petsData = await firebaseService.getPets();
-      console.log('Pets loaded:', petsData.length);
+      console.log('Data loaded:', { ownersCount: ownersData.length, petsCount: petsData.length });
       
-      // Update state - with explicit type casting to fix TypeScript errors
-      setOwners(ownersData as Owner[]);
-      setPets(petsData as Pet[]);
+      setOwners(ownersData);
+      setPets(petsData);
       setIsLoading(false);
-      console.log('Data loaded successfully');
+      console.log('State updated, loading complete:', { isLoading: false });
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading data from Firebase:', error);
       setIsLoading(false);
+      console.log('Error state updated:', { isLoading: false });
     }
   };
 
@@ -60,10 +60,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // Function to refresh data
-  const refreshData = () => {
+  const refreshData = async () => {
     console.log('Refreshing data...');
     setIsLoading(true);
-    loadData();
+    await loadData();
   };
 
   // Check for vaccinations that need reminders
@@ -104,7 +104,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const success = await sendNotification(vaccination);
         if (success) {
           // Mark reminder as sent
-          updateVaccinationReminder(vaccination.id, vaccination.petId);
+          await fbUpdateVaccinationReminder(vaccination.petId, vaccination.id);
+          refreshData(); // Refresh data to get updated state
         }
       });
     };
@@ -124,99 +125,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [isLoading]);
 
   const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
-    try {
-      const newOwner = await firebaseService.addOwner(ownerData);
-      if (newOwner) {
-        setOwners(prevOwners => [...prevOwners, newOwner]);
-      }
-    } catch (error) {
-      console.error('Error adding owner:', error);
+    const newOwner = await fbAddOwner(ownerData);
+    if (newOwner) {
+      // Update state
+      setOwners(prevOwners => [...prevOwners, newOwner]);
     }
   };
 
   const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
-    // Check if pet ID already exists
+    // Check if pet ID already exists (shouldn't happen with Firebase IDs)
     if (pets.some(pet => pet.id === petData.id)) {
       alert('A pet with this ID already exists. Please use a unique ID.');
       return;
     }
     
-    try {
-      const newPet = await firebaseService.addPet(petData);
-      if (newPet) {
-        setPets(prevPets => [...prevPets, newPet]);
-      }
-    } catch (error) {
-      console.error('Error adding pet:', error);
+    const newPet = await fbAddPet(petData);
+    if (newPet) {
+      // Update state
+      setPets(prevPets => [...prevPets, newPet]);
     }
   };
 
   const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
-    const newVaccination: Vaccination = {
-      ...vaccinationData,
-      id: `vacc-${Date.now()}`,
-      reminderSent: false
-    };
-
-    try {
-      // Find the pet
-      const pet = pets.find(p => p.id === vaccinationData.petId);
-      if (!pet) return;
-      
-      // Update pet with new vaccination
-      const updatedVaccinations = [...pet.vaccinations, newVaccination];
-      const success = await firebaseService.updatePet(pet.id, { 
-        vaccinations: updatedVaccinations 
-      });
-      
-      if (success) {
-        // Update state
-        setPets(prevPets => 
-          prevPets.map(pet => 
-            pet.id === vaccinationData.petId 
-              ? { ...pet, vaccinations: updatedVaccinations }
-              : pet
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error adding vaccination:', error);
-    }
-  };
-
-  const updateVaccinationReminder = async (vaccinationId: string, petId: string) => {
-    // Find the pet
-    const pet = pets.find(p => p.id === petId);
-    if (!pet) return;
-    
-    // Find the vaccination
-    const vaccinationIndex = pet.vaccinations.findIndex(v => v.id === vaccinationId);
-    if (vaccinationIndex === -1) return;
-    
-    // Update vaccination
-    const updatedVaccinations = [...pet.vaccinations];
-    updatedVaccinations[vaccinationIndex] = {
-      ...updatedVaccinations[vaccinationIndex],
-      reminderSent: true
-    };
-    
-    try {
-      // Update in Firebase
-      const success = await firebaseService.updatePet(petId, { 
-        vaccinations: updatedVaccinations 
-      });
-      
-      if (success) {
-        // Update state
-        setPets(prevPets => 
-          prevPets.map(pet => ({
-            ...pet,
-            vaccinations: pet.id === petId ? updatedVaccinations : pet.vaccinations
-          }))
-        );
-      }
-    } catch (error) {
-      console.error('Error updating vaccination reminder:', error);
+    const success = await fbAddVaccination(vaccinationData.petId, vaccinationData);
+    if (success) {
+      // Refresh pets data to get updated vaccinations
+      refreshData();
     }
   };
 
