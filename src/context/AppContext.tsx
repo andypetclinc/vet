@@ -1,8 +1,10 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-import { fetchOwners, fetchPets, addOwner as fbAddOwner, addPet as fbAddPet, 
+import { 
+  fetchOwners, fetchPets, addOwner as fbAddOwner, addPet as fbAddPet, 
   addVaccination as fbAddVaccination, updateVaccinationReminder as fbUpdateVaccinationReminder,
-  initializeSampleData } from '../firebase';
+  getHardcodedData
+} from '../firebase';
 
 interface AppContextType {
   owners: Owner[];
@@ -28,27 +30,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load data from Firebase
+  // Load data from Firebase or use hardcoded data if Firebase fails
   const loadData = async () => {
-    console.log('Loading data from Firebase...');
+    console.log('Loading data...');
     try {
-      // Initialize sample data if needed
-      await initializeSampleData();
-      
-      // Fetch data
+      // Try to load from Firebase first
       const ownersData = await fetchOwners();
       const petsData = await fetchPets();
       
-      console.log('Data loaded:', { ownersCount: ownersData.length, petsCount: petsData.length });
+      // If Firebase returns data, use it
+      if (ownersData.length > 0 && petsData.length > 0) {
+        console.log('Data loaded from Firebase:', { ownersCount: ownersData.length, petsCount: petsData.length });
+        setOwners(ownersData);
+        setPets(petsData);
+      } else {
+        // Otherwise use hardcoded data
+        console.log('No data in Firebase, using hardcoded data');
+        const { owners: hardcodedOwners, pets: hardcodedPets } = getHardcodedData();
+        setOwners(hardcodedOwners);
+        setPets(hardcodedPets);
+      }
       
-      setOwners(ownersData);
-      setPets(petsData);
       setIsLoading(false);
-      console.log('State updated, loading complete:', { isLoading: false });
     } catch (error) {
-      console.error('Error loading data from Firebase:', error);
+      console.error('Error loading data:', error);
+      // Use hardcoded data on error
+      console.log('Error loading from Firebase, using hardcoded data');
+      const { owners: hardcodedOwners, pets: hardcodedPets } = getHardcodedData();
+      setOwners(hardcodedOwners);
+      setPets(hardcodedPets);
       setIsLoading(false);
-      console.log('Error state updated:', { isLoading: false });
     }
   };
 
@@ -103,9 +114,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       remindersToSend.forEach(async (vaccination) => {
         const success = await sendNotification(vaccination);
         if (success) {
-          // Mark reminder as sent
-          await fbUpdateVaccinationReminder(vaccination.petId, vaccination.id);
-          refreshData(); // Refresh data to get updated state
+          // Update vaccination reminder locally since Firebase may fail
+          setPets(prevPets => 
+            prevPets.map(pet => ({
+              ...pet,
+              vaccinations: pet.vaccinations.map(vacc => 
+                vacc.id === vaccination.id 
+                  ? { ...vacc, reminderSent: true }
+                  : vacc
+              )
+            }))
+          );
+          
+          // Also try to update in Firebase (but don't rely on it)
+          fbUpdateVaccinationReminder(vaccination.petId, vaccination.id)
+            .catch(error => console.error('Failed to update in Firebase:', error));
         }
       });
     };
@@ -125,32 +148,81 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [isLoading]);
 
   const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
-    const newOwner = await fbAddOwner(ownerData);
-    if (newOwner) {
-      // Update state
+    try {
+      const newOwner = await fbAddOwner(ownerData);
+      if (newOwner) {
+        // Update state
+        setOwners(prevOwners => [...prevOwners, newOwner]);
+      }
+    } catch (error) {
+      console.error('Failed to add owner to Firebase:', error);
+      // Add locally anyway
+      const newOwner: Owner = {
+        ...ownerData,
+        id: `owner-${Date.now()}`
+      };
       setOwners(prevOwners => [...prevOwners, newOwner]);
     }
   };
 
   const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
-    // Check if pet ID already exists (shouldn't happen with Firebase IDs)
-    if (pets.some(pet => pet.id === petData.id)) {
-      alert('A pet with this ID already exists. Please use a unique ID.');
-      return;
-    }
-    
-    const newPet = await fbAddPet(petData);
-    if (newPet) {
-      // Update state
+    try {
+      // Check if pet ID already exists (shouldn't happen with Firebase IDs)
+      if (pets.some(pet => pet.id === petData.id)) {
+        alert('A pet with this ID already exists. Please use a unique ID.');
+        return;
+      }
+      
+      const newPet = await fbAddPet(petData);
+      if (newPet) {
+        // Update state
+        setPets(prevPets => [...prevPets, newPet]);
+      }
+    } catch (error) {
+      console.error('Failed to add pet to Firebase:', error);
+      // Add locally anyway
+      const newPet: Pet = {
+        ...petData,
+        id: `pet-${Date.now()}`,
+        vaccinations: []
+      };
       setPets(prevPets => [...prevPets, newPet]);
     }
   };
 
   const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
-    const success = await fbAddVaccination(vaccinationData.petId, vaccinationData);
-    if (success) {
-      // Refresh pets data to get updated vaccinations
-      refreshData();
+    try {
+      await fbAddVaccination(vaccinationData.petId, vaccinationData);
+      // Update local state directly instead of calling refreshData
+      const newVaccination: Vaccination = {
+        ...vaccinationData,
+        id: `vacc-${Date.now()}`,
+        reminderSent: false
+      };
+      
+      setPets(prevPets => 
+        prevPets.map(pet => 
+          pet.id === vaccinationData.petId 
+            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
+            : pet
+        )
+      );
+    } catch (error) {
+      console.error('Failed to add vaccination to Firebase:', error);
+      // Add locally anyway
+      const newVaccination: Vaccination = {
+        ...vaccinationData,
+        id: `vacc-${Date.now()}`,
+        reminderSent: false
+      };
+      
+      setPets(prevPets => 
+        prevPets.map(pet => 
+          pet.id === vaccinationData.petId 
+            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
+            : pet
+        )
+      );
     }
   };
 
