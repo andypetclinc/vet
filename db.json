@@ -1,0 +1,18 @@
+{
+  "owners": [
+    {
+      "id": "owner-1744847047454",
+      "name": "Andrew Maged Messiha",
+      "phoneNumber": "01274939858",
+      "email": "andrewmaged814@gmail.com"
+    },
+    {
+      "id": "5803",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "phoneNumber": "555-1234"
+    }
+  ],
+  "pets": [],
+  "vaccinations": []
+}
