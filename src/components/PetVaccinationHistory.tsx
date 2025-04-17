@@ -58,15 +58,15 @@ const PetVaccinationHistory: React.FC<PetVaccinationHistoryProps> = ({ petId }) 
 
   return (
     <div className="space-y-6">
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">
+      <div className="bg-white shadow-md rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <h2 className="text-lg sm:text-xl font-semibold">
             Vaccination Records for {pet.name}
           </h2>
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+              className="w-full sm:w-auto bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
             >
               Add New Vaccination
             </button>
@@ -79,52 +79,81 @@ const PetVaccinationHistory: React.FC<PetVaccinationHistoryProps> = ({ petId }) 
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vaccination Type
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date Administered
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Next Due Date
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Notes
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+            <div className="min-w-full divide-y divide-gray-200">
+              {/* Mobile view */}
+              <div className="sm:hidden space-y-4">
                 {vaccinations
                   .sort((a, b) => new Date(b.dateAdministered).getTime() - new Date(a.dateAdministered).getTime())
                   .map((vaccination) => (
-                    <tr key={vaccination.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{vaccination.type}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatDate(vaccination.dateAdministered)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatDate(vaccination.nextDueDate)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusLabel(vaccination.nextDueDate)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {vaccination.notes || '-'}
-                        </div>
-                      </td>
-                    </tr>
+                    <div key={vaccination.id} className="bg-gray-50 p-4 rounded-lg">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="font-medium">Type:</div>
+                        <div>{vaccination.type}</div>
+                        
+                        <div className="font-medium">Administered:</div>
+                        <div>{formatDate(vaccination.dateAdministered)}</div>
+                        
+                        <div className="font-medium">Next Due:</div>
+                        <div>{formatDate(vaccination.nextDueDate)}</div>
+                        
+                        <div className="font-medium">Status:</div>
+                        <div>{getStatusLabel(vaccination.nextDueDate)}</div>
+                        
+                        <div className="font-medium col-span-2">Notes:</div>
+                        <div className="col-span-2">{vaccination.notes || '-'}</div>
+                      </div>
+                    </div>
                   ))}
-              </tbody>
-            </table>
+              </div>
+              
+              {/* Desktop view */}
+              <table className="hidden sm:table min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Vaccination Type
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date Administered
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Next Due Date
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Notes
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {vaccinations
+                    .sort((a, b) => new Date(b.dateAdministered).getTime() - new Date(a.dateAdministered).getTime())
+                    .map((vaccination) => (
+                      <tr key={vaccination.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{vaccination.type}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatDate(vaccination.dateAdministered)}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatDate(vaccination.nextDueDate)}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {getStatusLabel(vaccination.nextDueDate)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {vaccination.notes || '-'}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
