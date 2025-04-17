@@ -1,8 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-import { fetchOwners, fetchPets, addOwner as fbAddOwner, addPet as fbAddPet, 
-  addVaccination as fbAddVaccination, updateVaccinationReminder as fbUpdateVaccinationReminder,
-  initializeSampleData } from '../services/firebase';
+import { db } from '../services/db';
 
 interface AppContextType {
   owners: Owner[];
@@ -17,7 +15,6 @@ interface AppContextType {
   setSearchTerm: (term: string) => void;
   sendNotification: (vaccination: Vaccination) => Promise<boolean>;
   refreshData: () => void;
-  isLoading: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -26,56 +23,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [owners, setOwners] = useState<Owner[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load data from Firebase
-  const loadData = async () => {
-    console.log('Loading data from Firebase...');
-    try {
-      // Initialize sample data if needed
-      await initializeSampleData();
-      
-      // Fetch data
-      const ownersData = await fetchOwners();
-      const petsData = await fetchPets();
-      
-      console.log('Data loaded:', { ownersCount: ownersData.length, petsCount: petsData.length });
-      
-      setOwners(ownersData);
-      setPets(petsData);
-      setIsLoading(false);
-      console.log('State updated, loading complete:', { isLoading: false });
-    } catch (error) {
-      console.error('Error loading data from Firebase:', error);
-      setIsLoading(false);
-      console.log('Error state updated:', { isLoading: false });
-    }
+  // Load initial data
+  const loadData = () => {
+    setOwners(db.getOwners());
+    setPets(db.getPets());
+    setIsInitialized(true);
   };
 
-  // Load data on component mount - only once
+  // Load data on component mount
   useEffect(() => {
-    console.log('AppProvider mounted, loading data...');
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Function to refresh data
-  const refreshData = async () => {
-    console.log('Refreshing data...');
-    setIsLoading(true);
-    await loadData();
+  // Function to refresh data from the database
+  const refreshData = () => {
+    loadData();
   };
 
   // Check for vaccinations that need reminders
   useEffect(() => {
-    if (isLoading) {
-      console.log('Skipping reminder check until data is loaded');
-      return;
-    }
+    if (!isInitialized) return;
 
-    console.log('Setting up vaccination reminders check');
     const checkForReminders = () => {
-      console.log('Checking for vaccinations needing reminders...');
       const today = new Date();
       const threeDaysFromNow = new Date(today);
       threeDaysFromNow.setDate(today.getDate() + 3);
@@ -96,62 +67,97 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       // Send reminders
-      if (remindersToSend.length > 0) {
-        console.log(`Found ${remindersToSend.length} vaccinations needing reminders`);
-      }
-      
       remindersToSend.forEach(async (vaccination) => {
         const success = await sendNotification(vaccination);
         if (success) {
           // Mark reminder as sent
-          await fbUpdateVaccinationReminder(vaccination.petId, vaccination.id);
-          refreshData(); // Refresh data to get updated state
+          updateVaccinationReminder(vaccination.id, vaccination.petId);
         }
       });
     };
 
     // Check for reminders initially and then every day
-    console.log('Running initial reminder check');
     checkForReminders();
-    
-    console.log('Setting up daily reminder check');
     const interval = setInterval(checkForReminders, 24 * 60 * 60 * 1000);
 
-    return () => {
-      console.log('Cleaning up reminder interval');
-      clearInterval(interval);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading]);
+    return () => clearInterval(interval);
+  }, [isInitialized, pets]);
 
-  const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
-    const newOwner = await fbAddOwner(ownerData);
-    if (newOwner) {
+  const addOwner = (ownerData: Omit<Owner, 'id'>) => {
+    const newOwner: Owner = {
+      ...ownerData,
+      id: `owner-${Date.now()}`
+    };
+    
+    // Add to database
+    if (db.addOwner(newOwner)) {
       // Update state
-      setOwners(prevOwners => [...prevOwners, newOwner]);
+      setOwners([...owners, newOwner]);
     }
   };
 
-  const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
-    // Check if pet ID already exists (shouldn't happen with Firebase IDs)
+  const addPet = (petData: Omit<Pet, 'vaccinations'>) => {
+    // Check if pet ID already exists
     if (pets.some(pet => pet.id === petData.id)) {
       alert('A pet with this ID already exists. Please use a unique ID.');
       return;
     }
     
-    const newPet = await fbAddPet(petData);
-    if (newPet) {
+    const newPet: Pet = {
+      ...petData,
+      vaccinations: []
+    };
+    
+    // Add to database
+    if (db.addPet(newPet)) {
       // Update state
-      setPets(prevPets => [...prevPets, newPet]);
+      setPets([...pets, newPet]);
     }
   };
 
-  const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
-    const success = await fbAddVaccination(vaccinationData.petId, vaccinationData);
-    if (success) {
-      // Refresh pets data to get updated vaccinations
-      refreshData();
+  const addVaccination = (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
+    const newVaccination: Vaccination = {
+      ...vaccinationData,
+      id: `vacc-${Date.now()}`,
+      reminderSent: false
+    };
+
+    // Add to database
+    if (db.addVaccination(vaccinationData.petId, newVaccination)) {
+      // Update state
+      setPets(prevPets => 
+        prevPets.map(pet => 
+          pet.id === vaccinationData.petId 
+            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
+            : pet
+        )
+      );
     }
+  };
+
+  const updateVaccinationReminder = (vaccinationId: string, petId: string) => {
+    // Find the pet
+    const pet = pets.find(p => p.id === petId);
+    if (!pet) return;
+    
+    // Find the vaccination
+    const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
+    if (!vaccination) return;
+    
+    // Update in database
+    db.updateVaccination(petId, vaccinationId, { reminderSent: true });
+    
+    // Update state
+    setPets(prevPets => 
+      prevPets.map(pet => ({
+        ...pet,
+        vaccinations: pet.vaccinations.map(vacc => 
+          vacc.id === vaccinationId 
+            ? { ...vacc, reminderSent: true }
+            : vacc
+        )
+      }))
+    );
   };
 
   const getUpcomingVaccinations = (daysAhead: number = 7) => {
@@ -221,8 +227,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         searchTerm,
         setSearchTerm,
         sendNotification,
-        refreshData,
-        isLoading
+        refreshData
       }}
     >
       {children}
