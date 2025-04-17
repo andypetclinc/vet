@@ -2,7 +2,7 @@ export interface Owner {
   id: string;
   name: string;
   phoneNumber: string;
-  email?: string; // Optional email for notifications
+  email?: string;
 }
 
 export type PetType = 'Cat' | 'Dog';
@@ -41,14 +41,13 @@ export interface Vaccination {
   id: string;
   petId: string;
   type: VaccinationType;
-  dateAdministered: string; // ISO date string
-  nextDueDate: string; // ISO date string
+  dateAdministered: string;
+  nextDueDate: string;
   notes?: string;
   reminderSent: boolean;
-  selectedInterval: string; // ID of the selected interval
+  selectedInterval: string;
 }
 
-// Define the configuration for vaccination types and their reminder intervals
 export const VACCINATION_CONFIGS: VaccinationTypeConfig[] = [
   {
     name: 'Anti-fleas',

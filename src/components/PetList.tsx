@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import PetDetails from './PetDetails';
+import { Pet } from '../types';
 
 const PetList: React.FC = () => {
   const { pets, owners, searchTerm } = useAppContext();
@@ -27,13 +28,10 @@ const PetList: React.FC = () => {
     setSelectedPetId(petId);
   };
 
-  // Function to close pet details view
-  const handleCloseDetails = () => {
-    setSelectedPetId(null);
-  };
-
   // Count vaccinations due soon (within 7 days)
-  const getDueVaccinationsCount = (pet: typeof pets[0]) => {
+  const getDueVaccinationsCount = (pet: Pet) => {
+    if (!pet.vaccinations) return 0;
+    
     const today = new Date();
     const sevenDaysLater = new Date(today);
     sevenDaysLater.setDate(today.getDate() + 7);
@@ -45,7 +43,9 @@ const PetList: React.FC = () => {
   };
 
   // Count overdue vaccinations
-  const getOverdueVaccinationsCount = (pet: typeof pets[0]) => {
+  const getOverdueVaccinationsCount = (pet: Pet) => {
+    if (!pet.vaccinations) return 0;
+    
     const today = new Date();
     
     return pet.vaccinations.filter(vacc => {
@@ -56,7 +56,7 @@ const PetList: React.FC = () => {
 
   // If a pet is selected, show its details
   if (selectedPetId) {
-    return <PetDetails petId={selectedPetId} onClose={handleCloseDetails} />;
+    return <PetDetails petId={selectedPetId} onClose={() => setSelectedPetId(null)} />;
   }
 
   if (pets.length === 0) {
@@ -116,7 +116,7 @@ const PetList: React.FC = () => {
                     {pet.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {pet.type}
+                    {pet.species}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {pet.age}
@@ -139,7 +139,7 @@ const PetList: React.FC = () => {
                       </span>
                     )}
                     {overdueCount === 0 && dueCount === 0 && (
-                      pet.vaccinations.length > 0 ? (
+                      pet.vaccinations && pet.vaccinations.length > 0 ? (
                         <span className="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">
                           Up to date
                         </span>

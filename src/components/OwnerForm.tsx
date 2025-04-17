@@ -4,8 +4,9 @@ import { useAppContext } from '../context/AppContext';
 const OwnerForm: React.FC = () => {
   const { addOwner } = useAppContext();
   const [name, setName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -13,17 +14,19 @@ const OwnerForm: React.FC = () => {
     e.preventDefault();
     setError(null);
     
-    if (name.trim() && phoneNumber.trim()) {
+    if (name.trim() && phone.trim()) {
       try {
         setIsSubmitting(true);
         await addOwner({
           name,
-          phoneNumber,
-          email: email.trim() || undefined
+          phone,
+          email: email.trim() || "",
+          address: address.trim() || ""
         });
         setName('');
-        setPhoneNumber('');
+        setPhone('');
         setEmail('');
+        setAddress('');
       } catch (err) {
         setError('Failed to add owner. Please try again.');
         console.error(err);
@@ -57,15 +60,15 @@ const OwnerForm: React.FC = () => {
           />
         </div>
         <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phoneNumber">
+          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone">
             Phone Number
           </label>
           <input
-            id="phoneNumber"
+            id="phone"
             type="tel"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
             required
             disabled={isSubmitting}
           />
@@ -86,6 +89,20 @@ const OwnerForm: React.FC = () => {
           <p className="text-sm text-gray-500 mt-1">
             Used for sending vaccination reminders
           </p>
+        </div>
+        <div className="mb-4">
+          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="address">
+            Address
+          </label>
+          <textarea
+            id="address"
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Optional"
+            rows={2}
+            disabled={isSubmitting}
+          />
         </div>
         <button
           type="submit"

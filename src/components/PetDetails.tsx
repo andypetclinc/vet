@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import PetVaccinationHistory from './PetVaccinationHistory';
+import { db } from '../services/db';
 
 interface PetDetailsProps {
   petId: string;
@@ -8,7 +9,7 @@ interface PetDetailsProps {
 }
 
 const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
-  const { pets, owners, deletePet } = useAppContext();
+  const { pets, owners, refreshData } = useAppContext();
   const [isDeleting, setIsDeleting] = useState(false);
   
   const pet = pets.find(p => p.id === petId);
@@ -32,8 +33,13 @@ const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
     if (window.confirm(`Are you sure you want to delete ${pet.name}? This will also remove all vaccination records.`)) {
       setIsDeleting(true);
       try {
-        await deletePet(petId);
-        onClose();
+        // Use db.deletePet directly instead of context
+        if (db.deletePet(petId)) {
+          refreshData(); // Refresh context data after deletion
+          onClose();
+        } else {
+          throw new Error('Failed to delete pet');
+        }
       } catch (error) {
         console.error('Error deleting pet:', error);
         setIsDeleting(false);
@@ -69,7 +75,7 @@ const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
             <div className="space-y-2">
               <p><span className="font-semibold">ID:</span> {pet.id}</p>
               <p><span className="font-semibold">Name:</span> {pet.name}</p>
-              <p><span className="font-semibold">Type:</span> {pet.type}</p>
+              <p><span className="font-semibold">Type:</span> {pet.species}</p>
               <p><span className="font-semibold">Breed:</span> {pet.breed}</p>
               <p><span className="font-semibold">Age:</span> {pet.age} years</p>
             </div>
@@ -80,7 +86,7 @@ const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
             {owner ? (
               <div className="space-y-2">
                 <p><span className="font-semibold">Name:</span> {owner.name}</p>
-                <p><span className="font-semibold">Phone:</span> {owner.phoneNumber}</p>
+                <p><span className="font-semibold">Phone:</span> {owner.phone}</p>
                 {owner.email && <p><span className="font-semibold">Email:</span> {owner.email}</p>}
               </div>
             ) : (

@@ -1,22 +1,20 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
-import { Owner, Pet, Vaccination, VACCINATION_CONFIGS } from '../types';
-import * as api from '../services/api';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import { Owner, Pet, Vaccination } from '../types';
+import { db } from '../services/db';
 
 interface AppContextType {
   owners: Owner[];
   pets: Pet[];
-  addOwner: (owner: Omit<Owner, 'id'>) => Promise<void>;
-  addPet: (pet: Omit<Pet, 'vaccinations'>) => Promise<void>;
-  addVaccination: (vaccination: Omit<Vaccination, 'id' | 'reminderSent'>) => Promise<void>;
-  deletePet: (petId: string) => Promise<void>;
+  addOwner: (owner: Omit<Owner, 'id'>) => void;
+  addPet: (pet: Omit<Pet, 'vaccinations'>) => void;
+  addVaccination: (vaccination: Omit<Vaccination, 'id' | 'reminderSent'>) => void;
   getUpcomingVaccinations: (daysAhead: number) => Vaccination[];
   getDueVaccinationsForPet: (petId: string) => Vaccination[];
   getVaccinationsForPet: (petId: string) => Vaccination[];
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   sendNotification: (vaccination: Vaccination) => Promise<boolean>;
-  loading: boolean;
-  error: string | null;
+  refreshData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -24,189 +22,179 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
-  const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Fetch data from the database on component mount
+  // Load initial data
+  const loadData = () => {
+    setOwners(db.getOwners());
+    setPets(db.getPets());
+    setIsInitialized(true);
+  };
+
+  // Load data on component mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        const [ownersData, petsData, vaccinationsData] = await Promise.all([
-          api.fetchOwners(),
-          api.fetchPets(),
-          api.fetchVaccinations()
-        ]);
-        
-        setOwners(ownersData);
-        setPets(petsData);
-        setVaccinations(vaccinationsData);
-        setError(null);
-      } catch (err) {
-        setError('Failed to fetch data');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchData();
+    loadData();
   }, []);
+
+  // Function to refresh data from the database
+  const refreshData = () => {
+    loadData();
+  };
 
   // Check for vaccinations that need reminders
   useEffect(() => {
-    const checkForReminders = async () => {
+    if (!isInitialized) return;
+
+    const checkForReminders = () => {
       const today = new Date();
       const threeDaysFromNow = new Date(today);
       threeDaysFromNow.setDate(today.getDate() + 3);
 
       let remindersToSend: Vaccination[] = [];
 
-      vaccinations.forEach(vaccination => {
-        const dueDate = new Date(vaccination.nextDueDate);
-        if (!vaccination.reminderSent && 
-            dueDate <= threeDaysFromNow && 
-            dueDate >= today) {
-          remindersToSend.push(vaccination);
+      pets.forEach(pet => {
+        const dueVaccinations = pet.vaccinations.filter(vaccination => {
+          const dueDate = new Date(vaccination.nextDueDate);
+          return !vaccination.reminderSent && 
+                 dueDate <= threeDaysFromNow && 
+                 dueDate >= today;
+        });
+
+        if (dueVaccinations.length > 0) {
+          remindersToSend = [...remindersToSend, ...dueVaccinations];
         }
       });
 
       // Send reminders
-      for (const vaccination of remindersToSend) {
-        try {
-          const success = await sendNotification(vaccination);
-          if (success) {
-            // Mark reminder as sent
-            await updateVaccinationReminder(vaccination.id);
-          }
-        } catch (err) {
-          console.error('Failed to send notification:', err);
+      remindersToSend.forEach(async (vaccination) => {
+        const success = await sendNotification(vaccination);
+        if (success) {
+          // Mark reminder as sent
+          updateVaccinationReminder(vaccination.id, vaccination.petId);
         }
-      }
+      });
     };
 
-    // Check for reminders only if we have vaccinations
-    if (vaccinations.length > 0 && !loading) {
-      checkForReminders();
-      // Set up interval for daily checks
-      const interval = setInterval(checkForReminders, 24 * 60 * 60 * 1000);
-      return () => clearInterval(interval);
-    }
-  }, [vaccinations, loading]);
+    // Check for reminders initially and then every day
+    checkForReminders();
+    const interval = setInterval(checkForReminders, 24 * 60 * 60 * 1000);
 
-  const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
-    try {
-      setLoading(true);
-      const newOwner = await api.createOwner(ownerData);
-      setOwners(prevOwners => [...prevOwners, newOwner]);
-    } catch (err) {
-      setError('Failed to add owner');
-      console.error(err);
-    } finally {
-      setLoading(false);
+    return () => clearInterval(interval);
+  }, [isInitialized, pets]);
+
+  const addOwner = (ownerData: Omit<Owner, 'id'>) => {
+    const newOwner: Owner = {
+      ...ownerData,
+      id: `owner-${Date.now()}`
+    };
+    
+    // Add to database
+    if (db.addOwner(newOwner)) {
+      // Update state
+      setOwners([...owners, newOwner]);
     }
   };
 
-  const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
-    try {
-      // Check if pet ID already exists
-      if (pets.some(pet => pet.id === petData.id)) {
-        alert('A pet with this ID already exists. Please use a unique ID.');
-        return;
-      }
-      
-      setLoading(true);
-      const newPet = await api.createPet(petData);
-      setPets(prevPets => [...prevPets, newPet]);
-    } catch (err) {
-      setError('Failed to add pet');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const addPet = (petData: Omit<Pet, 'vaccinations'>) => {
+    // Check if pet ID already exists
+    if (pets.some(pet => pet.id === petData.id)) {
+      alert('A pet with this ID already exists. Please use a unique ID.');
+      return;
+    }
+    
+    const newPet: Pet = {
+      ...petData,
+      vaccinations: []
+    };
+    
+    // Add to database
+    if (db.addPet(newPet)) {
+      // Update state
+      setPets([...pets, newPet]);
     }
   };
 
-  const deletePet = async (petId: string) => {
-    try {
-      setLoading(true);
-      await api.deletePet(petId);
-      
-      // Remove pet from state
-      setPets(prevPets => prevPets.filter(pet => pet.id !== petId));
-      
-      // Remove related vaccinations
-      setVaccinations(prevVaccinations => 
-        prevVaccinations.filter(vaccination => vaccination.petId !== petId)
-      );
-    } catch (err) {
-      setError('Failed to delete pet');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const addVaccination = (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
+    const newVaccination: Vaccination = {
+      ...vaccinationData,
+      id: `vacc-${Date.now()}`,
+      reminderSent: false
+    };
 
-  const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
-    try {
-      setLoading(true);
-      const newVaccination = await api.createVaccination(vaccinationData);
-      setVaccinations(prevVaccinations => [...prevVaccinations, newVaccination]);
-    } catch (err) {
-      setError('Failed to add vaccination');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateVaccinationReminder = async (vaccinationId: string) => {
-    try {
-      const vaccination = vaccinations.find(v => v.id === vaccinationId);
-      if (!vaccination) return;
-
-      const updatedVaccination = {
-        ...vaccination,
-        reminderSent: true
-      };
-
-      const result = await api.updateVaccination(updatedVaccination);
-      
-      setVaccinations(prevVaccinations => 
-        prevVaccinations.map(vacc => 
-          vacc.id === vaccinationId ? result : vacc
+    // Add to database
+    if (db.addVaccination(vaccinationData.petId, newVaccination)) {
+      // Update state
+      setPets(prevPets => 
+        prevPets.map(pet => 
+          pet.id === vaccinationData.petId 
+            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
+            : pet
         )
       );
-    } catch (err) {
-      console.error('Failed to update vaccination reminder:', err);
     }
   };
 
-  const getUpcomingVaccinations = useCallback((daysAhead: number = 7) => {
+  const updateVaccinationReminder = (vaccinationId: string, petId: string) => {
+    // Find the pet
+    const pet = pets.find(p => p.id === petId);
+    if (!pet) return;
+    
+    // Find the vaccination
+    const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
+    if (!vaccination) return;
+    
+    // Update in database
+    db.updateVaccination(petId, vaccinationId, { reminderSent: true });
+    
+    // Update state
+    setPets(prevPets => 
+      prevPets.map(pet => ({
+        ...pet,
+        vaccinations: pet.vaccinations.map(vacc => 
+          vacc.id === vaccinationId 
+            ? { ...vacc, reminderSent: true }
+            : vacc
+        )
+      }))
+    );
+  };
+
+  const getUpcomingVaccinations = (daysAhead: number = 7) => {
     const today = new Date();
     const futureDate = new Date(today);
     futureDate.setDate(today.getDate() + daysAhead);
 
-    return vaccinations.filter(vaccination => {
-      const dueDate = new Date(vaccination.nextDueDate);
-      return dueDate >= today && dueDate <= futureDate;
-    });
-  }, [vaccinations]);
+    const upcomingVaccinations: Vaccination[] = [];
 
-  const getDueVaccinationsForPet = useCallback((petId: string) => {
+    pets.forEach(pet => {
+      pet.vaccinations.forEach(vaccination => {
+        const dueDate = new Date(vaccination.nextDueDate);
+        if (dueDate >= today && dueDate <= futureDate) {
+          upcomingVaccinations.push(vaccination);
+        }
+      });
+    });
+
+    return upcomingVaccinations;
+  };
+
+  const getDueVaccinationsForPet = (petId: string) => {
     const today = new Date();
+    const pet = pets.find(p => p.id === petId);
     
-    return vaccinations.filter(vaccination => {
+    if (!pet) return [];
+    
+    return pet.vaccinations.filter(vaccination => {
       const dueDate = new Date(vaccination.nextDueDate);
-      return vaccination.petId === petId && dueDate <= today;
+      return dueDate <= today;
     });
-  }, [vaccinations]);
+  };
 
-  const getVaccinationsForPet = useCallback((petId: string) => {
-    return vaccinations.filter(vaccination => vaccination.petId === petId);
-  }, [vaccinations]);
+  const getVaccinationsForPet = (petId: string) => {
+    const pet = pets.find(p => p.id === petId);
+    return pet ? pet.vaccinations : [];
+  };
 
   // Mock function to simulate sending email/SMS notifications
   const sendNotification = async (vaccination: Vaccination): Promise<boolean> => {
@@ -233,15 +221,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addOwner,
         addPet,
         addVaccination,
-        deletePet,
         getUpcomingVaccinations,
         getDueVaccinationsForPet,
         getVaccinationsForPet,
         searchTerm,
         setSearchTerm,
         sendNotification,
-        loading,
-        error
+        refreshData
       }}
     >
       {children}

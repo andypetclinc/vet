@@ -6,26 +6,29 @@ const PetForm: React.FC = () => {
   const { addPet, owners } = useAppContext();
   const [id, setId] = useState('');
   const [name, setName] = useState('');
-  const [type, setType] = useState<PetType>('Dog');
+  const [species, setSpecies] = useState<PetType>('Dog');
   const [age, setAge] = useState('');
+  const [weight, setWeight] = useState('');
   const [breed, setBreed] = useState('');
   const [ownerId, setOwnerId] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (id.trim() && name.trim() && breed.trim() && ownerId && age) {
+    if (id.trim() && name.trim() && breed.trim() && ownerId && age && weight) {
       addPet({
         id,
         name,
-        type,
+        species,
         age: parseInt(age, 10),
+        weight: parseFloat(weight),
         breed,
         ownerId
       });
       setId('');
       setName('');
-      setType('Dog');
+      setSpecies('Dog');
       setAge('');
+      setWeight('');
       setBreed('');
       setOwnerId('');
     }
@@ -64,13 +67,13 @@ const PetForm: React.FC = () => {
         </div>
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="petType">
-            Pet Type
+            Pet Species
           </label>
           <select
             id="petType"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            value={type}
-            onChange={(e) => setType(e.target.value as PetType)}
+            value={species}
+            onChange={(e) => setSpecies(e.target.value as PetType)}
             required
           >
             <option value="Dog">Dog</option>
@@ -88,6 +91,21 @@ const PetForm: React.FC = () => {
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             value={age}
             onChange={(e) => setAge(e.target.value)}
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="petWeight">
+            Weight (lbs)
+          </label>
+          <input
+            id="petWeight"
+            type="number"
+            min="0"
+            step="0.1"
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
             required
           />
         </div>

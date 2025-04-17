@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { VACCINATION_CONFIGS, VaccinationType } from '../types';
+import { VACCINATION_CONFIGS, VaccinationType, VaccinationConfig, ReminderInterval } from '../types';
 
 interface VaccinationFormProps {
   petId: string;
@@ -13,10 +13,19 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
     new Date().toISOString().split('T')[0]
   );
   const [selectedInterval, setSelectedInterval] = useState('');
+  const [nextDueDate, setNextDueDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [availableIntervals, setAvailableIntervals] = useState(
+  const [availableIntervals, setAvailableIntervals] = useState<ReminderInterval[]>(
     VACCINATION_CONFIGS[0].reminderIntervals
   );
+
+  // Initialize selected interval on component mount
+  useEffect(() => {
+    // Set default selected interval to the first interval of the first vaccination type
+    if (VACCINATION_CONFIGS.length > 0 && VACCINATION_CONFIGS[0].reminderIntervals.length > 0) {
+      setSelectedInterval(VACCINATION_CONFIGS[0].reminderIntervals[0].id);
+    }
+  }, []);
 
   // Update available intervals when vaccination type changes
   useEffect(() => {
@@ -26,6 +35,12 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
       setSelectedInterval(config.reminderIntervals[0].id);
     }
   }, [type]);
+
+  // Calculate the next due date whenever date administered or selected interval changes
+  useEffect(() => {
+    const calculatedDate = calculateNextDueDate();
+    setNextDueDate(calculatedDate);
+  }, [dateAdministered, selectedInterval]);
 
   const calculateNextDueDate = (): string => {
     const interval = availableIntervals.find(
@@ -39,6 +54,13 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
     return date.toISOString().split('T')[0];
   };
 
+  const getIntervalLabel = (): string => {
+    const interval = availableIntervals.find(
+      interval => interval.id === selectedInterval
+    );
+    return interval ? interval.label : '';
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -47,8 +69,6 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
       return;
     }
 
-    const nextDueDate = calculateNextDueDate();
-    
     if (!nextDueDate) {
       alert('Error calculating next due date');
       return;
@@ -60,7 +80,7 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
       dateAdministered,
       nextDueDate,
       notes,
-      selectedInterval
+      reminderInterval: getIntervalLabel()
     });
 
     // Reset form
@@ -68,6 +88,7 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
     setDateAdministered(new Date().toISOString().split('T')[0]);
     setSelectedInterval(VACCINATION_CONFIGS[0].reminderIntervals[0].id);
     setNotes('');
+    // nextDueDate will be updated by the useEffect
   };
 
   // Find the pet name for display
@@ -89,7 +110,7 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
             onChange={(e) => setType(e.target.value as VaccinationType)}
             required
           >
-            {VACCINATION_CONFIGS.map((config) => (
+            {VACCINATION_CONFIGS.map((config: VaccinationConfig) => (
               <option key={config.name} value={config.name}>
                 {config.name}
               </option>
@@ -123,7 +144,7 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
             onChange={(e) => setSelectedInterval(e.target.value)}
             required
           >
-            {availableIntervals.map((interval) => (
+            {availableIntervals.map((interval: ReminderInterval) => (
               <option key={interval.id} value={interval.id}>
                 {interval.label}
               </option>
@@ -139,7 +160,7 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId }) => {
             id="nextDueDate"
             type="date"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 bg-gray-100 leading-tight focus:outline-none focus:shadow-outline"
-            value={calculateNextDueDate()}
+            value={nextDueDate}
             readOnly
           />
           <p className="text-sm text-gray-500 mt-1">
