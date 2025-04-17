@@ -1,10 +1,113 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-import { 
-  fetchOwners, fetchPets, addOwner as fbAddOwner, addPet as fbAddPet, 
-  addVaccination as fbAddVaccination, updateVaccinationReminder as fbUpdateVaccinationReminder,
-  getHardcodedData
-} from '../firebase';
+
+// Sample data for local usage
+const sampleOwners: Owner[] = [
+  {
+    id: 'owner-1',
+    name: 'John Smith',
+    email: 'john@example.com',
+    phone: '555-123-4567',
+    address: '123 Main St, Anytown, USA'
+  },
+  {
+    id: 'owner-2',
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    phone: '555-987-6543',
+    address: '456 Oak Ave, Somewhere, USA'
+  }
+];
+
+// Create sample dates for vaccinations
+const today = new Date();
+const threeDaysAgo = new Date(today);
+threeDaysAgo.setDate(today.getDate() - 3);
+
+const inTwoDays = new Date(today);
+inTwoDays.setDate(today.getDate() + 2);
+
+const inTenDays = new Date(today);
+inTenDays.setDate(today.getDate() + 10);
+
+const lastMonth = new Date(today);
+lastMonth.setMonth(today.getMonth() - 1);
+
+const samplePets: Pet[] = [
+  {
+    id: 'pet-1',
+    ownerId: 'owner-1',
+    name: 'Max',
+    species: 'Dog',
+    breed: 'Golden Retriever',
+    age: 5,
+    weight: 70,
+    vaccinations: [
+      {
+        id: 'vacc-1',
+        petId: 'pet-1',
+        type: 'Rabies',
+        dateAdministered: lastMonth.toISOString().split('T')[0],
+        nextDueDate: inTenDays.toISOString().split('T')[0],
+        reminderInterval: '1 Year',
+        notes: 'No adverse reactions',
+        reminderSent: false
+      }
+    ]
+  },
+  {
+    id: 'pet-2',
+    ownerId: 'owner-2',
+    name: 'Whiskers',
+    species: 'Cat',
+    breed: 'Siamese',
+    age: 3,
+    weight: 10,
+    vaccinations: [
+      {
+        id: 'vacc-2',
+        petId: 'pet-2',
+        type: 'Deworming',
+        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
+        nextDueDate: inTwoDays.toISOString().split('T')[0],
+        reminderInterval: '2 Weeks',
+        notes: 'Mild reaction, monitor next time',
+        reminderSent: false
+      }
+    ]
+  },
+  {
+    id: 'pet-3',
+    ownerId: 'owner-1',
+    name: 'Buddy',
+    species: 'Dog',
+    breed: 'Labrador',
+    age: 2,
+    weight: 65,
+    vaccinations: [
+      {
+        id: 'vacc-3',
+        petId: 'pet-3',
+        type: 'Anti-fleas',
+        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
+        nextDueDate: inTenDays.toISOString().split('T')[0],
+        reminderInterval: '2 Months',
+        notes: 'Used spot-on treatment',
+        reminderSent: false
+      },
+      {
+        id: 'vacc-4',
+        petId: 'pet-3',
+        type: 'Viral vaccine',
+        dateAdministered: lastMonth.toISOString().split('T')[0],
+        nextDueDate: inTwoDays.toISOString().split('T')[0],
+        reminderInterval: '20 Days',
+        notes: 'Booster shot',
+        reminderSent: false
+      }
+    ]
+  }
+];
 
 interface AppContextType {
   owners: Owner[];
@@ -30,51 +133,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load data from Firebase or use hardcoded data if Firebase fails
-  const loadData = async () => {
-    console.log('Loading data...');
-    try {
-      // Try to load from Firebase first
-      const ownersData = await fetchOwners();
-      const petsData = await fetchPets();
-      
-      // If Firebase returns data, use it
-      if (ownersData.length > 0 && petsData.length > 0) {
-        console.log('Data loaded from Firebase:', { ownersCount: ownersData.length, petsCount: petsData.length });
-        setOwners(ownersData);
-        setPets(petsData);
-      } else {
-        // Otherwise use hardcoded data
-        console.log('No data in Firebase, using hardcoded data');
-        const { owners: hardcodedOwners, pets: hardcodedPets } = getHardcodedData();
-        setOwners(hardcodedOwners);
-        setPets(hardcodedPets);
+  // Load sample data with a small delay to simulate fetching
+  const loadData = () => {
+    console.log('Loading sample data...');
+    
+    // Use a timeout to simulate network delay and prevent UI flashing
+    setTimeout(() => {
+      try {
+        setOwners(sampleOwners);
+        setPets(samplePets);
+        setIsLoading(false);
+        console.log('Sample data loaded successfully');
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      // Use hardcoded data on error
-      console.log('Error loading from Firebase, using hardcoded data');
-      const { owners: hardcodedOwners, pets: hardcodedPets } = getHardcodedData();
-      setOwners(hardcodedOwners);
-      setPets(hardcodedPets);
-      setIsLoading(false);
-    }
+    }, 1000); // 1 second delay to simulate loading
   };
 
   // Load data on component mount - only once
   useEffect(() => {
     console.log('AppProvider mounted, loading data...');
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Function to refresh data
-  const refreshData = async () => {
+  const refreshData = () => {
     console.log('Refreshing data...');
     setIsLoading(true);
-    await loadData();
+    loadData();
   };
 
   // Check for vaccinations that need reminders
@@ -114,21 +201,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       remindersToSend.forEach(async (vaccination) => {
         const success = await sendNotification(vaccination);
         if (success) {
-          // Update vaccination reminder locally since Firebase may fail
-          setPets(prevPets => 
-            prevPets.map(pet => ({
-              ...pet,
-              vaccinations: pet.vaccinations.map(vacc => 
-                vacc.id === vaccination.id 
-                  ? { ...vacc, reminderSent: true }
-                  : vacc
-              )
-            }))
-          );
-          
-          // Also try to update in Firebase (but don't rely on it)
-          fbUpdateVaccinationReminder(vaccination.petId, vaccination.id)
-            .catch(error => console.error('Failed to update in Firebase:', error));
+          // Mark reminder as sent
+          updateVaccinationReminder(vaccination.petId, vaccination.id);
         }
       });
     };
@@ -144,86 +218,68 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.log('Cleaning up reminder interval');
       clearInterval(interval);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
-  const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
-    try {
-      const newOwner = await fbAddOwner(ownerData);
-      if (newOwner) {
-        // Update state
-        setOwners(prevOwners => [...prevOwners, newOwner]);
-      }
-    } catch (error) {
-      console.error('Failed to add owner to Firebase:', error);
-      // Add locally anyway
-      const newOwner: Owner = {
-        ...ownerData,
-        id: `owner-${Date.now()}`
-      };
-      setOwners(prevOwners => [...prevOwners, newOwner]);
-    }
+  const addOwner = (ownerData: Omit<Owner, 'id'>) => {
+    const newOwner: Owner = {
+      ...ownerData,
+      id: `owner-${Date.now()}`
+    };
+    
+    setOwners(prevOwners => [...prevOwners, newOwner]);
   };
 
-  const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
-    try {
-      // Check if pet ID already exists (shouldn't happen with Firebase IDs)
-      if (pets.some(pet => pet.id === petData.id)) {
-        alert('A pet with this ID already exists. Please use a unique ID.');
-        return;
-      }
-      
-      const newPet = await fbAddPet(petData);
-      if (newPet) {
-        // Update state
-        setPets(prevPets => [...prevPets, newPet]);
-      }
-    } catch (error) {
-      console.error('Failed to add pet to Firebase:', error);
-      // Add locally anyway
-      const newPet: Pet = {
-        ...petData,
-        id: `pet-${Date.now()}`,
-        vaccinations: []
-      };
-      setPets(prevPets => [...prevPets, newPet]);
+  const addPet = (petData: Omit<Pet, 'vaccinations'>) => {
+    // Check if pet ID already exists
+    if (pets.some(pet => pet.id === petData.id)) {
+      alert('A pet with this ID already exists. Please use a unique ID.');
+      return;
     }
+    
+    const newPet: Pet = {
+      ...petData,
+      vaccinations: []
+    };
+    
+    setPets(prevPets => [...prevPets, newPet]);
   };
 
-  const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
-    try {
-      await fbAddVaccination(vaccinationData.petId, vaccinationData);
-      // Update local state directly instead of calling refreshData
-      const newVaccination: Vaccination = {
-        ...vaccinationData,
-        id: `vacc-${Date.now()}`,
-        reminderSent: false
-      };
-      
-      setPets(prevPets => 
-        prevPets.map(pet => 
-          pet.id === vaccinationData.petId 
-            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
-            : pet
+  const addVaccination = (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
+    const newVaccination: Vaccination = {
+      ...vaccinationData,
+      id: `vacc-${Date.now()}`,
+      reminderSent: false
+    };
+
+    setPets(prevPets => 
+      prevPets.map(pet => 
+        pet.id === vaccinationData.petId 
+          ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
+          : pet
+      )
+    );
+  };
+
+  const updateVaccinationReminder = (petId: string, vaccinationId: string) => {
+    // Find the pet
+    const pet = pets.find(p => p.id === petId);
+    if (!pet) return;
+    
+    // Find the vaccination
+    const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
+    if (!vaccination) return;
+    
+    // Update state
+    setPets(prevPets => 
+      prevPets.map(pet => ({
+        ...pet,
+        vaccinations: pet.vaccinations.map(vacc => 
+          vacc.id === vaccinationId 
+            ? { ...vacc, reminderSent: true }
+            : vacc
         )
-      );
-    } catch (error) {
-      console.error('Failed to add vaccination to Firebase:', error);
-      // Add locally anyway
-      const newVaccination: Vaccination = {
-        ...vaccinationData,
-        id: `vacc-${Date.now()}`,
-        reminderSent: false
-      };
-      
-      setPets(prevPets => 
-        prevPets.map(pet => 
-          pet.id === vaccinationData.petId 
-            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
-            : pet
-        )
-      );
-    }
+      }))
+    );
   };
 
   const getUpcomingVaccinations = (daysAhead: number = 7) => {
