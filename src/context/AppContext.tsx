@@ -1,113 +1,8 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-
-// Sample data for local usage
-const sampleOwners: Owner[] = [
-  {
-    id: 'owner-1',
-    name: 'John Smith',
-    email: 'john@example.com',
-    phone: '555-123-4567',
-    address: '123 Main St, Anytown, USA'
-  },
-  {
-    id: 'owner-2',
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    phone: '555-987-6543',
-    address: '456 Oak Ave, Somewhere, USA'
-  }
-];
-
-// Create sample dates for vaccinations
-const today = new Date();
-const threeDaysAgo = new Date(today);
-threeDaysAgo.setDate(today.getDate() - 3);
-
-const inTwoDays = new Date(today);
-inTwoDays.setDate(today.getDate() + 2);
-
-const inTenDays = new Date(today);
-inTenDays.setDate(today.getDate() + 10);
-
-const lastMonth = new Date(today);
-lastMonth.setMonth(today.getMonth() - 1);
-
-const samplePets: Pet[] = [
-  {
-    id: 'pet-1',
-    ownerId: 'owner-1',
-    name: 'Max',
-    species: 'Dog',
-    breed: 'Golden Retriever',
-    age: 5,
-    weight: 70,
-    vaccinations: [
-      {
-        id: 'vacc-1',
-        petId: 'pet-1',
-        type: 'Rabies',
-        dateAdministered: lastMonth.toISOString().split('T')[0],
-        nextDueDate: inTenDays.toISOString().split('T')[0],
-        reminderInterval: '1 Year',
-        notes: 'No adverse reactions',
-        reminderSent: false
-      }
-    ]
-  },
-  {
-    id: 'pet-2',
-    ownerId: 'owner-2',
-    name: 'Whiskers',
-    species: 'Cat',
-    breed: 'Siamese',
-    age: 3,
-    weight: 10,
-    vaccinations: [
-      {
-        id: 'vacc-2',
-        petId: 'pet-2',
-        type: 'Deworming',
-        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
-        nextDueDate: inTwoDays.toISOString().split('T')[0],
-        reminderInterval: '2 Weeks',
-        notes: 'Mild reaction, monitor next time',
-        reminderSent: false
-      }
-    ]
-  },
-  {
-    id: 'pet-3',
-    ownerId: 'owner-1',
-    name: 'Buddy',
-    species: 'Dog',
-    breed: 'Labrador',
-    age: 2,
-    weight: 65,
-    vaccinations: [
-      {
-        id: 'vacc-3',
-        petId: 'pet-3',
-        type: 'Anti-fleas',
-        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
-        nextDueDate: inTenDays.toISOString().split('T')[0],
-        reminderInterval: '2 Months',
-        notes: 'Used spot-on treatment',
-        reminderSent: false
-      },
-      {
-        id: 'vacc-4',
-        petId: 'pet-3',
-        type: 'Viral vaccine',
-        dateAdministered: lastMonth.toISOString().split('T')[0],
-        nextDueDate: inTwoDays.toISOString().split('T')[0],
-        reminderInterval: '20 Days',
-        notes: 'Booster shot',
-        reminderSent: false
-      }
-    ]
-  }
-];
+import { fetchOwners, fetchPets, addOwner as fbAddOwner, addPet as fbAddPet, 
+  addVaccination as fbAddVaccination, updateVaccinationReminder as fbUpdateVaccinationReminder,
+  initializeSampleData } from '../services/firebase';
 
 interface AppContextType {
   owners: Owner[];
@@ -133,35 +28,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load sample data with a small delay to simulate fetching
-  const loadData = () => {
-    console.log('Loading sample data...');
-    
-    // Use a timeout to simulate network delay and prevent UI flashing
-    setTimeout(() => {
-      try {
-        setOwners(sampleOwners);
-        setPets(samplePets);
-        setIsLoading(false);
-        console.log('Sample data loaded successfully');
-      } catch (error) {
-        console.error('Error loading data:', error);
-        setIsLoading(false);
-      }
-    }, 1000); // 1 second delay to simulate loading
+  // Load data from Firebase
+  const loadData = async () => {
+    console.log('Loading data from Firebase...');
+    try {
+      // Initialize sample data if needed
+      await initializeSampleData();
+      
+      // Fetch data
+      const ownersData = await fetchOwners();
+      const petsData = await fetchPets();
+      
+      console.log('Data loaded:', { ownersCount: ownersData.length, petsCount: petsData.length });
+      
+      setOwners(ownersData);
+      setPets(petsData);
+      setIsLoading(false);
+      console.log('State updated, loading complete:', { isLoading: false });
+    } catch (error) {
+      console.error('Error loading data from Firebase:', error);
+      setIsLoading(false);
+      console.log('Error state updated:', { isLoading: false });
+    }
   };
 
   // Load data on component mount - only once
   useEffect(() => {
     console.log('AppProvider mounted, loading data...');
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Function to refresh data
-  const refreshData = () => {
+  const refreshData = async () => {
     console.log('Refreshing data...');
     setIsLoading(true);
-    loadData();
+    await loadData();
   };
 
   // Check for vaccinations that need reminders
@@ -202,7 +104,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const success = await sendNotification(vaccination);
         if (success) {
           // Mark reminder as sent
-          updateVaccinationReminder(vaccination.petId, vaccination.id);
+          await fbUpdateVaccinationReminder(vaccination.petId, vaccination.id);
+          refreshData(); // Refresh data to get updated state
         }
       });
     };
@@ -218,68 +121,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.log('Cleaning up reminder interval');
       clearInterval(interval);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
-  const addOwner = (ownerData: Omit<Owner, 'id'>) => {
-    const newOwner: Owner = {
-      ...ownerData,
-      id: `owner-${Date.now()}`
-    };
-    
-    setOwners(prevOwners => [...prevOwners, newOwner]);
+  const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
+    const newOwner = await fbAddOwner(ownerData);
+    if (newOwner) {
+      // Update state
+      setOwners(prevOwners => [...prevOwners, newOwner]);
+    }
   };
 
-  const addPet = (petData: Omit<Pet, 'vaccinations'>) => {
-    // Check if pet ID already exists
+  const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
+    // Check if pet ID already exists (shouldn't happen with Firebase IDs)
     if (pets.some(pet => pet.id === petData.id)) {
       alert('A pet with this ID already exists. Please use a unique ID.');
       return;
     }
     
-    const newPet: Pet = {
-      ...petData,
-      vaccinations: []
-    };
-    
-    setPets(prevPets => [...prevPets, newPet]);
+    const newPet = await fbAddPet(petData);
+    if (newPet) {
+      // Update state
+      setPets(prevPets => [...prevPets, newPet]);
+    }
   };
 
-  const addVaccination = (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
-    const newVaccination: Vaccination = {
-      ...vaccinationData,
-      id: `vacc-${Date.now()}`,
-      reminderSent: false
-    };
-
-    setPets(prevPets => 
-      prevPets.map(pet => 
-        pet.id === vaccinationData.petId 
-          ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
-          : pet
-      )
-    );
-  };
-
-  const updateVaccinationReminder = (petId: string, vaccinationId: string) => {
-    // Find the pet
-    const pet = pets.find(p => p.id === petId);
-    if (!pet) return;
-    
-    // Find the vaccination
-    const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
-    if (!vaccination) return;
-    
-    // Update state
-    setPets(prevPets => 
-      prevPets.map(pet => ({
-        ...pet,
-        vaccinations: pet.vaccinations.map(vacc => 
-          vacc.id === vaccinationId 
-            ? { ...vacc, reminderSent: true }
-            : vacc
-        )
-      }))
-    );
+  const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
+    const success = await fbAddVaccination(vaccinationData.petId, vaccinationData);
+    if (success) {
+      // Refresh pets data to get updated vaccinations
+      refreshData();
+    }
   };
 
   const getUpcomingVaccinations = (daysAhead: number = 7) => {
