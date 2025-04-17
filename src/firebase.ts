@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { Owner, Pet, Vaccination } from './types';
 
 // Your web app's Firebase configuration
@@ -143,9 +143,21 @@ export const firebaseService = {
         lastMonth.setMonth(today.getMonth() - 1);
         
         // Sample pets with vaccinations
-        type PetWithVaccinations = Omit<Pet, 'id'> & { vaccinations: Omit<Vaccination, 'petId'>[] };
+        interface TempVaccination {
+          id: string;
+          type: string;
+          dateAdministered: string;
+          nextDueDate: string;
+          reminderInterval: string;
+          notes: string;
+          reminderSent: boolean;
+        }
+
+        type PetWithTempVaccinations = Omit<Pet, 'id' | 'vaccinations'> & { 
+          vaccinations: TempVaccination[] 
+        };
         
-        const samplePets: PetWithVaccinations[] = [
+        const samplePets: PetWithTempVaccinations[] = [
           {
             ownerId: ownerRefs[0].id,
             name: 'Max',

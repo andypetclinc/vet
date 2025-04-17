@@ -41,9 +41,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const petsData = await firebaseService.getPets();
       console.log('Pets loaded:', petsData.length);
       
-      // Update state
-      setOwners(ownersData);
-      setPets(petsData);
+      // Update state - with explicit type casting to fix TypeScript errors
+      setOwners(ownersData as Owner[]);
+      setPets(petsData as Pet[]);
       setIsLoading(false);
       console.log('Data loaded successfully');
     } catch (error) {
