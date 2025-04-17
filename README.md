@@ -1,35 +1,41 @@
-# Veterinary Clinic Management Application
+# Andy Pet Clinic
 
-A responsive web application for managing a veterinary clinic's pets and owners.
+A modern, responsive web application for managing a veterinary clinic's pet records, vaccinations, and sending reminders to pet owners.
 
 ## Features
 
-- Add pet owners with their essential details (Name and Phone Number)
-- Link pets (cats and dogs) to their respective owners
-- Track pet details including Name, Type, Age, Breed, and Pet ID
-- Search for pets by Name or ID
-- Responsive design optimized for mobile devices
+- **Pet and Owner Management**: Keep track of pets and their owners
+- **Vaccination Records**: Record and manage pet vaccinations 
+- **Vaccination Dashboard**: View upcoming and overdue vaccinations
+- **WhatsApp Integration**: Send vaccination reminders via WhatsApp
+- **Responsive Design**: Works on desktop and mobile devices
+
+## Demo
+
+This application is deployed on GitHub Pages: [https://andypetclinc.github.io/vet/](https://andypetclinc.github.io/vet/)
 
 ## Technologies Used
 
-- React
+- React 18
 - TypeScript
 - Tailwind CSS
-- Context API for state management
+- LocalStorage for data persistence
 
-## Getting Started
+## Vaccination Types
 
-### Prerequisites
+The application supports the following vaccination types with their reminder intervals:
 
-- Node.js (v14 or later)
-- npm or yarn
+- **Anti-fleas**: Reminders at 2-month and 3-month intervals
+- **Deworming**: Reminders at 2-week and 2-month intervals
+- **Viral vaccine**: Reminders at 20-day and 1-year intervals
+- **Rabies**: Reminders at 20-day and 1-year intervals
 
-### Installation
+## Local Development
 
 1. Clone the repository
    ```
-   git clone <repository-url>
-   cd vet-clinic-app
+   git clone https://github.com/andypetclinc/vet.git
+   cd vet
    ```
 
 2. Install dependencies
@@ -42,18 +48,17 @@ A responsive web application for managing a veterinary clinic's pets and owners.
    npm start
    ```
 
-4. Open your browser and navigate to `http://localhost:3000`
+4. Open [http://localhost:3000](http://localhost:3000) to view it in the browser
 
-## Usage
+## Deployment
 
-1. First, add an owner using the "Add Owner" form
-2. Then, add pets for that owner using the "Add Pet" form
-3. Use the search bar to filter pets by their name or ID
-4. View all pets and their details in the table
+This project is set up for automatic deployment to GitHub Pages using the gh-pages package.
 
-## Mobile Responsiveness
+To deploy:
+```
+npm run deploy
+```
 
-The application is designed to be fully responsive:
-- Forms stack vertically on smaller screens
-- Table adapts to screen size with horizontal scrolling when needed
-- Elements are properly sized for touch interactions on mobile 
+## License
+
+MIT 

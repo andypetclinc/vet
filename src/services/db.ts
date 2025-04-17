@@ -3,6 +3,7 @@ import { Owner, Pet, Vaccination } from '../types';
 // Database keys
 const OWNERS_KEY = 'vet_app_owners';
 const PETS_KEY = 'vet_app_pets';
+const INITIALIZED_KEY = 'vet_app_initialized';
 
 // Type for a partial update
 type PartialVaccination = Partial<Vaccination>;
@@ -13,9 +14,28 @@ type PartialVaccination = Partial<Vaccination>;
  */
 export const db = {
   /**
+   * Check if database is initialized
+   */
+  isInitialized(): boolean {
+    return localStorage.getItem(INITIALIZED_KEY) === 'true';
+  },
+
+  /**
+   * Mark database as initialized
+   */
+  markAsInitialized(): void {
+    localStorage.setItem(INITIALIZED_KEY, 'true');
+  },
+
+  /**
    * Load owners from localStorage
    */
   getOwners(): Owner[] {
+    // Auto-initialize if not initialized
+    if (!this.isInitialized()) {
+      this.initialize();
+    }
+    
     const ownersData = localStorage.getItem(OWNERS_KEY);
     return ownersData ? JSON.parse(ownersData) : [];
   },
@@ -24,6 +44,11 @@ export const db = {
    * Load pets from localStorage
    */
   getPets(): Pet[] {
+    // Auto-initialize if not initialized
+    if (!this.isInitialized()) {
+      this.initialize();
+    }
+    
     const petsData = localStorage.getItem(PETS_KEY);
     return petsData ? JSON.parse(petsData) : [];
   },
@@ -290,6 +315,7 @@ export const db = {
     const pets = this.getPets();
     
     if (owners.length > 0 || pets.length > 0) {
+      this.markAsInitialized();
       console.log('Database already initialized');
       return;
     }
@@ -405,6 +431,9 @@ export const db = {
     // Save sample data
     this.saveOwners(sampleOwners);
     this.savePets(samplePets);
+    
+    // Mark as initialized
+    this.markAsInitialized();
     
     console.log('Database initialized with sample data');
   }
