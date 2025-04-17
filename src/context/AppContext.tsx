@@ -1,115 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-// Remove db import since we'll use in-memory data
-// import { db } from '../services/db';
-
-// Sample data to use instead of localStorage
-const sampleOwners: Owner[] = [
-  {
-    id: 'owner-1',
-    name: 'John Smith',
-    email: 'john@example.com',
-    phone: '555-123-4567',
-    address: '123 Main St, Anytown, USA'
-  },
-  {
-    id: 'owner-2',
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    phone: '555-987-6543',
-    address: '456 Oak Ave, Somewhere, USA'
-  }
-];
-
-// Sample pets
-const today = new Date();
-const threeDaysAgo = new Date(today);
-threeDaysAgo.setDate(today.getDate() - 3);
-
-const inTwoDays = new Date(today);
-inTwoDays.setDate(today.getDate() + 2);
-
-const inTenDays = new Date(today);
-inTenDays.setDate(today.getDate() + 10);
-
-const lastMonth = new Date(today);
-lastMonth.setMonth(today.getMonth() - 1);
-
-const samplePets: Pet[] = [
-  {
-    id: 'pet-1',
-    ownerId: 'owner-1',
-    name: 'Max',
-    species: 'Dog',
-    breed: 'Golden Retriever',
-    age: 5,
-    weight: 70,
-    vaccinations: [
-      {
-        id: 'vacc-1',
-        petId: 'pet-1',
-        type: 'Rabies',
-        dateAdministered: lastMonth.toISOString().split('T')[0],
-        nextDueDate: inTenDays.toISOString().split('T')[0],
-        reminderInterval: '1 Year',
-        notes: 'No adverse reactions',
-        reminderSent: false
-      }
-    ]
-  },
-  {
-    id: 'pet-2',
-    ownerId: 'owner-2',
-    name: 'Whiskers',
-    species: 'Cat',
-    breed: 'Siamese',
-    age: 3,
-    weight: 10,
-    vaccinations: [
-      {
-        id: 'vacc-2',
-        petId: 'pet-2',
-        type: 'Deworming',
-        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
-        nextDueDate: inTwoDays.toISOString().split('T')[0],
-        reminderInterval: '2 Weeks',
-        notes: 'Mild reaction, monitor next time',
-        reminderSent: false
-      }
-    ]
-  },
-  {
-    id: 'pet-3',
-    ownerId: 'owner-1',
-    name: 'Buddy',
-    species: 'Dog',
-    breed: 'Labrador',
-    age: 2,
-    weight: 65,
-    vaccinations: [
-      {
-        id: 'vacc-3',
-        petId: 'pet-3',
-        type: 'Anti-fleas',
-        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
-        nextDueDate: inTenDays.toISOString().split('T')[0],
-        reminderInterval: '2 Months',
-        notes: 'Used spot-on treatment',
-        reminderSent: false
-      },
-      {
-        id: 'vacc-4',
-        petId: 'pet-3',
-        type: 'Viral vaccine',
-        dateAdministered: lastMonth.toISOString().split('T')[0],
-        nextDueDate: inTwoDays.toISOString().split('T')[0],
-        reminderInterval: '20 Days',
-        notes: 'Booster shot',
-        reminderSent: false
-      }
-    ]
-  }
-];
+import { firebaseService } from '../firebase';
 
 interface AppContextType {
   owners: Owner[];
@@ -135,19 +26,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load sample data directly
-  const loadData = () => {
-    console.log('Loading sample data directly instead of using localStorage');
+  // Load data from Firebase
+  const loadData = async () => {
+    console.log('Loading data from Firebase...');
     try {
-      // Simulate a small delay to avoid UI flashing
-      setTimeout(() => {
-        setOwners(sampleOwners);
-        setPets(samplePets);
-        setIsLoading(false);
-        console.log('Sample data loaded successfully', { ownersCount: sampleOwners.length, petsCount: samplePets.length });
-      }, 500);
+      // Initialize Firebase with sample data if empty
+      await firebaseService.initializeIfEmpty();
+      
+      // Get owners
+      const ownersData = await firebaseService.getOwners();
+      console.log('Owners loaded:', ownersData.length);
+      
+      // Get pets
+      const petsData = await firebaseService.getPets();
+      console.log('Pets loaded:', petsData.length);
+      
+      // Update state
+      setOwners(ownersData);
+      setPets(petsData);
+      setIsLoading(false);
+      console.log('Data loaded successfully');
     } catch (error) {
-      console.error('Error loading sample data:', error);
+      console.error('Error loading data:', error);
       setIsLoading(false);
     }
   };
@@ -223,69 +123,101 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
-  const addOwner = (ownerData: Omit<Owner, 'id'>) => {
-    const newOwner: Owner = {
-      ...ownerData,
-      id: `owner-${Date.now()}`
-    };
-    
-    // Update state directly
-    setOwners(prevOwners => [...prevOwners, newOwner]);
+  const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
+    try {
+      const newOwner = await firebaseService.addOwner(ownerData);
+      if (newOwner) {
+        setOwners(prevOwners => [...prevOwners, newOwner]);
+      }
+    } catch (error) {
+      console.error('Error adding owner:', error);
+    }
   };
 
-  const addPet = (petData: Omit<Pet, 'vaccinations'>) => {
+  const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
     // Check if pet ID already exists
     if (pets.some(pet => pet.id === petData.id)) {
       alert('A pet with this ID already exists. Please use a unique ID.');
       return;
     }
     
-    const newPet: Pet = {
-      ...petData,
-      vaccinations: []
-    };
-    
-    // Update state directly
-    setPets(prevPets => [...prevPets, newPet]);
+    try {
+      const newPet = await firebaseService.addPet(petData);
+      if (newPet) {
+        setPets(prevPets => [...prevPets, newPet]);
+      }
+    } catch (error) {
+      console.error('Error adding pet:', error);
+    }
   };
 
-  const addVaccination = (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
+  const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
     const newVaccination: Vaccination = {
       ...vaccinationData,
       id: `vacc-${Date.now()}`,
       reminderSent: false
     };
 
-    // Update state directly
-    setPets(prevPets => 
-      prevPets.map(pet => 
-        pet.id === vaccinationData.petId 
-          ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
-          : pet
-      )
-    );
+    try {
+      // Find the pet
+      const pet = pets.find(p => p.id === vaccinationData.petId);
+      if (!pet) return;
+      
+      // Update pet with new vaccination
+      const updatedVaccinations = [...pet.vaccinations, newVaccination];
+      const success = await firebaseService.updatePet(pet.id, { 
+        vaccinations: updatedVaccinations 
+      });
+      
+      if (success) {
+        // Update state
+        setPets(prevPets => 
+          prevPets.map(pet => 
+            pet.id === vaccinationData.petId 
+              ? { ...pet, vaccinations: updatedVaccinations }
+              : pet
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error adding vaccination:', error);
+    }
   };
 
-  const updateVaccinationReminder = (vaccinationId: string, petId: string) => {
+  const updateVaccinationReminder = async (vaccinationId: string, petId: string) => {
     // Find the pet
     const pet = pets.find(p => p.id === petId);
     if (!pet) return;
     
     // Find the vaccination
-    const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
-    if (!vaccination) return;
+    const vaccinationIndex = pet.vaccinations.findIndex(v => v.id === vaccinationId);
+    if (vaccinationIndex === -1) return;
     
-    // Update state directly
-    setPets(prevPets => 
-      prevPets.map(pet => ({
-        ...pet,
-        vaccinations: pet.vaccinations.map(vacc => 
-          vacc.id === vaccinationId 
-            ? { ...vacc, reminderSent: true }
-            : vacc
-        )
-      }))
-    );
+    // Update vaccination
+    const updatedVaccinations = [...pet.vaccinations];
+    updatedVaccinations[vaccinationIndex] = {
+      ...updatedVaccinations[vaccinationIndex],
+      reminderSent: true
+    };
+    
+    try {
+      // Update in Firebase
+      const success = await firebaseService.updatePet(petId, { 
+        vaccinations: updatedVaccinations 
+      });
+      
+      if (success) {
+        // Update state
+        setPets(prevPets => 
+          prevPets.map(pet => ({
+            ...pet,
+            vaccinations: pet.id === petId ? updatedVaccinations : pet.vaccinations
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Error updating vaccination reminder:', error);
+    }
   };
 
   const getUpcomingVaccinations = (daysAhead: number = 7) => {
