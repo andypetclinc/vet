@@ -22,9 +22,9 @@ const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
           <h2 className="text-xl sm:text-2xl font-bold">{pet.name}</h2>
           <button 
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+            className="w-full sm:w-auto px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md transition-colors duration-200"
           >
-            Close
+            Back to Dashboard
           </button>
         </div>
         
