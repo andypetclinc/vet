@@ -33,9 +33,10 @@ const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
     if (window.confirm(`Are you sure you want to delete ${pet.name}? This will also remove all vaccination records.`)) {
       setIsDeleting(true);
       try {
-        // Use db.deletePet directly instead of context
-        if (db.deletePet(petId)) {
-          refreshData(); // Refresh context data after deletion
+        // Await the Promise and check its result
+        const success = await db.deletePet(petId);
+        if (success) {
+          await refreshData(); // Refresh context data after deletion
           onClose();
         } else {
           throw new Error('Failed to delete pet');

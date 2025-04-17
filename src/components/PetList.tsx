@@ -2,9 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import PetDetails from './PetDetails';
 import { Pet } from '../types';
+import LoadingSpinner from './LoadingSpinner';
 
 const PetList: React.FC = () => {
-  const { pets, owners, searchTerm } = useAppContext();
+  const { pets, owners, searchTerm, loading, error } = useAppContext();
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
 
   const filteredPets = useMemo(() => {
@@ -57,6 +58,27 @@ const PetList: React.FC = () => {
   // If a pet is selected, show its details
   if (selectedPetId) {
     return <PetDetails petId={selectedPetId} onClose={() => setSelectedPetId(null)} />;
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="bg-white shadow-md rounded-lg p-6 flex justify-center">
+        <LoadingSpinner message="Loading pets..." />
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="bg-white shadow-md rounded-lg p-6">
+        <div className="bg-red-100 text-red-700 p-4 rounded">
+          <p className="font-bold">Error loading pets</p>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
   }
 
   if (pets.length === 0) {

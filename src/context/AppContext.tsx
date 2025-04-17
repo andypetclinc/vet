@@ -1,20 +1,22 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
 import { db } from '../services/db';
 
 interface AppContextType {
   owners: Owner[];
   pets: Pet[];
-  addOwner: (owner: Omit<Owner, 'id'>) => void;
-  addPet: (pet: Omit<Pet, 'vaccinations'>) => void;
-  addVaccination: (vaccination: Omit<Vaccination, 'id' | 'reminderSent'>) => void;
+  loading: boolean;
+  error: string | null;
+  addOwner: (owner: Omit<Owner, 'id'>) => Promise<void>;
+  addPet: (pet: Omit<Pet, 'vaccinations'>) => Promise<void>;
+  addVaccination: (vaccination: Omit<Vaccination, 'id' | 'reminderSent'>) => Promise<void>;
   getUpcomingVaccinations: (daysAhead: number) => Vaccination[];
   getDueVaccinationsForPet: (petId: string) => Vaccination[];
   getVaccinationsForPet: (petId: string) => Vaccination[];
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   sendNotification: (vaccination: Vaccination) => Promise<boolean>;
-  refreshData: () => void;
+  refreshData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -24,22 +26,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [pets, setPets] = useState<Pet[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Load initial data
-  const loadData = () => {
-    setOwners(db.getOwners());
-    setPets(db.getPets());
-    setIsInitialized(true);
-  };
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const ownersData = await db.getOwners();
+      const petsData = await db.getPets();
+      setOwners(ownersData);
+      setPets(petsData);
+      setIsInitialized(true);
+    } catch (err: any) {
+      console.error('Failed to load data:', err);
+      setError(err.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Load data on component mount
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Function to refresh data from the database
-  const refreshData = () => {
-    loadData();
+  const refreshData = async () => {
+    await loadData();
   };
 
   // Check for vaccinations that need reminders
@@ -71,7 +86,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const success = await sendNotification(vaccination);
         if (success) {
           // Mark reminder as sent
-          updateVaccinationReminder(vaccination.id, vaccination.petId);
+          updateVaccinationReminder(vaccination.petId, vaccination.id);
         }
       });
     };
@@ -83,81 +98,117 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => clearInterval(interval);
   }, [isInitialized, pets]);
 
-  const addOwner = (ownerData: Omit<Owner, 'id'>) => {
-    const newOwner: Owner = {
-      ...ownerData,
-      id: `owner-${Date.now()}`
-    };
-    
-    // Add to database
-    if (db.addOwner(newOwner)) {
-      // Update state
-      setOwners([...owners, newOwner]);
+  const addOwner = async (ownerData: Omit<Owner, 'id'>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const ownerId = await db.addOwner(ownerData);
+      
+      // Update state with the new owner including the ID from Firestore
+      const newOwner: Owner = {
+        ...ownerData,
+        id: ownerId
+      };
+      
+      setOwners(prevOwners => [...prevOwners, newOwner]);
+    } catch (err: any) {
+      console.error('Failed to add owner:', err);
+      setError(err.message || 'Failed to add owner');
+      alert(`Failed to add owner: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const addPet = (petData: Omit<Pet, 'vaccinations'>) => {
-    // Check if pet ID already exists
-    if (pets.some(pet => pet.id === petData.id)) {
-      alert('A pet with this ID already exists. Please use a unique ID.');
-      return;
-    }
-    
-    const newPet: Pet = {
-      ...petData,
-      vaccinations: []
-    };
-    
-    // Add to database
-    if (db.addPet(newPet)) {
-      // Update state
-      setPets([...pets, newPet]);
-    }
-  };
-
-  const addVaccination = (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
-    const newVaccination: Vaccination = {
-      ...vaccinationData,
-      id: `vacc-${Date.now()}`,
-      reminderSent: false
-    };
-
-    // Add to database
-    if (db.addVaccination(vaccinationData.petId, newVaccination)) {
-      // Update state
-      setPets(prevPets => 
-        prevPets.map(pet => 
-          pet.id === vaccinationData.petId 
-            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
-            : pet
-        )
-      );
+  const addPet = async (petData: Omit<Pet, 'vaccinations'>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const petWithVaccinations: Omit<Pet, 'id'> = {
+        ...petData,
+        vaccinations: []
+      };
+      
+      const petId = await db.addPet(petWithVaccinations);
+      
+      // Update state with the new pet including the ID from Firestore
+      const newPet: Pet = {
+        ...petWithVaccinations,
+        id: petId
+      };
+      
+      setPets(prevPets => [...prevPets, newPet]);
+    } catch (err: any) {
+      console.error('Failed to add pet:', err);
+      setError(err.message || 'Failed to add pet');
+      alert(`Failed to add pet: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const updateVaccinationReminder = (vaccinationId: string, petId: string) => {
-    // Find the pet
-    const pet = pets.find(p => p.id === petId);
-    if (!pet) return;
-    
-    // Find the vaccination
-    const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
-    if (!vaccination) return;
-    
-    // Update in database
-    db.updateVaccination(petId, vaccinationId, { reminderSent: true });
-    
-    // Update state
-    setPets(prevPets => 
-      prevPets.map(pet => ({
-        ...pet,
-        vaccinations: pet.vaccinations.map(vacc => 
-          vacc.id === vaccinationId 
-            ? { ...vacc, reminderSent: true }
-            : vacc
-        )
-      }))
-    );
+  const addVaccination = async (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const newVaccination: Vaccination = {
+        ...vaccinationData,
+        id: `vacc-${Date.now()}`,
+        reminderSent: false
+      };
+
+      // Add to database
+      const success = await db.addVaccination(vaccinationData.petId, newVaccination);
+      
+      if (success) {
+        // Update state
+        setPets(prevPets => 
+          prevPets.map(pet => 
+            pet.id === vaccinationData.petId 
+              ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
+              : pet
+          )
+        );
+      }
+    } catch (err: any) {
+      console.error('Failed to add vaccination:', err);
+      setError(err.message || 'Failed to add vaccination');
+      alert(`Failed to add vaccination: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateVaccinationReminder = async (petId: string, vaccinationId: string) => {
+    try {
+      // Find the pet
+      const pet = pets.find(p => p.id === petId);
+      if (!pet) return;
+      
+      // Find the vaccination
+      const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
+      if (!vaccination) return;
+      
+      // Update in database
+      const success = await db.updateVaccination(petId, vaccinationId, { reminderSent: true });
+      
+      if (success) {
+        // Update state
+        setPets(prevPets => 
+          prevPets.map(pet => ({
+            ...pet,
+            vaccinations: pet.vaccinations.map(vacc => 
+              vacc.id === vaccinationId 
+                ? { ...vacc, reminderSent: true }
+                : vacc
+            )
+          }))
+        );
+      }
+    } catch (err: any) {
+      console.error('Failed to update vaccination reminder:', err);
+      setError(err.message || 'Failed to update vaccination reminder');
+    }
   };
 
   const getUpcomingVaccinations = (daysAhead: number = 7) => {
@@ -218,6 +269,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       value={{
         owners,
         pets,
+        loading,
+        error,
         addOwner,
         addPet,
         addVaccination,
