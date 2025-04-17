@@ -98,7 +98,7 @@ const VaccinationForm: React.FC<VaccinationFormProps> = ({ petId, onClose }) => 
 
   return (
     <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-      <div className="mb-4">
+      <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">Add Vaccination for {petName}</h2>
       </div>
       <form onSubmit={handleSubmit}>
