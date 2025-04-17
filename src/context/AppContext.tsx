@@ -1,6 +1,115 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Owner, Pet, Vaccination } from '../types';
-import { db } from '../services/db';
+// Remove db import since we'll use in-memory data
+// import { db } from '../services/db';
+
+// Sample data to use instead of localStorage
+const sampleOwners: Owner[] = [
+  {
+    id: 'owner-1',
+    name: 'John Smith',
+    email: 'john@example.com',
+    phone: '555-123-4567',
+    address: '123 Main St, Anytown, USA'
+  },
+  {
+    id: 'owner-2',
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    phone: '555-987-6543',
+    address: '456 Oak Ave, Somewhere, USA'
+  }
+];
+
+// Sample pets
+const today = new Date();
+const threeDaysAgo = new Date(today);
+threeDaysAgo.setDate(today.getDate() - 3);
+
+const inTwoDays = new Date(today);
+inTwoDays.setDate(today.getDate() + 2);
+
+const inTenDays = new Date(today);
+inTenDays.setDate(today.getDate() + 10);
+
+const lastMonth = new Date(today);
+lastMonth.setMonth(today.getMonth() - 1);
+
+const samplePets: Pet[] = [
+  {
+    id: 'pet-1',
+    ownerId: 'owner-1',
+    name: 'Max',
+    species: 'Dog',
+    breed: 'Golden Retriever',
+    age: 5,
+    weight: 70,
+    vaccinations: [
+      {
+        id: 'vacc-1',
+        petId: 'pet-1',
+        type: 'Rabies',
+        dateAdministered: lastMonth.toISOString().split('T')[0],
+        nextDueDate: inTenDays.toISOString().split('T')[0],
+        reminderInterval: '1 Year',
+        notes: 'No adverse reactions',
+        reminderSent: false
+      }
+    ]
+  },
+  {
+    id: 'pet-2',
+    ownerId: 'owner-2',
+    name: 'Whiskers',
+    species: 'Cat',
+    breed: 'Siamese',
+    age: 3,
+    weight: 10,
+    vaccinations: [
+      {
+        id: 'vacc-2',
+        petId: 'pet-2',
+        type: 'Deworming',
+        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
+        nextDueDate: inTwoDays.toISOString().split('T')[0],
+        reminderInterval: '2 Weeks',
+        notes: 'Mild reaction, monitor next time',
+        reminderSent: false
+      }
+    ]
+  },
+  {
+    id: 'pet-3',
+    ownerId: 'owner-1',
+    name: 'Buddy',
+    species: 'Dog',
+    breed: 'Labrador',
+    age: 2,
+    weight: 65,
+    vaccinations: [
+      {
+        id: 'vacc-3',
+        petId: 'pet-3',
+        type: 'Anti-fleas',
+        dateAdministered: threeDaysAgo.toISOString().split('T')[0],
+        nextDueDate: inTenDays.toISOString().split('T')[0],
+        reminderInterval: '2 Months',
+        notes: 'Used spot-on treatment',
+        reminderSent: false
+      },
+      {
+        id: 'vacc-4',
+        petId: 'pet-3',
+        type: 'Viral vaccine',
+        dateAdministered: lastMonth.toISOString().split('T')[0],
+        nextDueDate: inTwoDays.toISOString().split('T')[0],
+        reminderInterval: '20 Days',
+        notes: 'Booster shot',
+        reminderSent: false
+      }
+    ]
+  }
+];
 
 interface AppContextType {
   owners: Owner[];
@@ -20,97 +129,26 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Check if localStorage is available
-const isLocalStorageAvailable = () => {
-  try {
-    const testKey = '__localStorage_test__';
-    localStorage.setItem(testKey, testKey);
-    localStorage.removeItem(testKey);
-    return true;
-  } catch (e) {
-    console.error('localStorage is not available:', e);
-    return false;
-  }
-};
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Add fallback data for cases where localStorage is unavailable
-  const fallbackToMockData = () => {
-    console.log('Falling back to mock data because localStorage is unavailable');
-    // Create some basic sample data
-    const sampleOwners: Owner[] = [
-      {
-        id: 'owner-1',
-        name: 'John Smith',
-        email: 'john@example.com',
-        phone: '555-123-4567',
-        address: '123 Main St, Anytown, USA'
-      }
-    ];
-    
-    const samplePets: Pet[] = [
-      {
-        id: 'pet-1',
-        ownerId: 'owner-1',
-        name: 'Max',
-        species: 'Dog',
-        breed: 'Golden Retriever',
-        age: 5,
-        weight: 70,
-        vaccinations: []
-      }
-    ];
-    
-    setOwners(sampleOwners);
-    setPets(samplePets);
-    setIsInitialized(true);
-    setIsLoading(false);
-    console.log('Mock data loaded successfully');
-  };
 
-  // Load initial data - removed from useEffect to avoid re-fetching
+  // Load sample data directly
   const loadData = () => {
-    console.log('Loading data from db...', { isInitialized, isLoading });
-    
-    // Check localStorage availability
-    if (!isLocalStorageAvailable()) {
-      console.warn('localStorage is not available - using fallback data');
-      fallbackToMockData();
-      return;
-    }
-    
+    console.log('Loading sample data directly instead of using localStorage');
     try {
-      // Initialize database if needed
-      if (!db.isInitialized()) {
-        console.log('Initializing database with sample data...');
-        db.initialize();
-        console.log('Database initialization complete');
-      } else {
-        console.log('Database already initialized');
-      }
-
-      // Load data
-      const ownersData = db.getOwners();
-      const petsData = db.getPets();
-      console.log('Data loaded:', { ownersCount: ownersData.length, petsCount: petsData.length });
-      
-      setOwners(ownersData);
-      setPets(petsData);
-      setIsInitialized(true);
-      setIsLoading(false);
-      console.log('State updated, loading complete:', { isInitialized: true, isLoading: false });
+      // Simulate a small delay to avoid UI flashing
+      setTimeout(() => {
+        setOwners(sampleOwners);
+        setPets(samplePets);
+        setIsLoading(false);
+        console.log('Sample data loaded successfully', { ownersCount: sampleOwners.length, petsCount: samplePets.length });
+      }, 500);
     } catch (error) {
-      console.error('Error loading data:', error);
-      // Still mark as initialized to avoid infinite loops
-      setIsInitialized(true);
+      console.error('Error loading sample data:', error);
       setIsLoading(false);
-      console.log('Error state updated:', { isInitialized: true, isLoading: false });
     }
   };
 
@@ -121,16 +159,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Function to refresh data from the database
+  // Function to refresh data
   const refreshData = () => {
     console.log('Refreshing data...');
+    setIsLoading(true);
     loadData();
   };
 
-  // Check for vaccinations that need reminders - only run when data is initialized
+  // Check for vaccinations that need reminders
   useEffect(() => {
-    if (!isInitialized || isLoading) {
-      console.log('Skipping reminder check until initialization is complete');
+    if (isLoading) {
+      console.log('Skipping reminder check until data is loaded');
       return;
     }
 
@@ -182,7 +221,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       clearInterval(interval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInitialized, isLoading]);
+  }, [isLoading]);
 
   const addOwner = (ownerData: Omit<Owner, 'id'>) => {
     const newOwner: Owner = {
@@ -190,11 +229,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id: `owner-${Date.now()}`
     };
     
-    // Add to database
-    if (db.addOwner(newOwner)) {
-      // Update state
-      setOwners([...owners, newOwner]);
-    }
+    // Update state directly
+    setOwners(prevOwners => [...prevOwners, newOwner]);
   };
 
   const addPet = (petData: Omit<Pet, 'vaccinations'>) => {
@@ -209,11 +245,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       vaccinations: []
     };
     
-    // Add to database
-    if (db.addPet(newPet)) {
-      // Update state
-      setPets([...pets, newPet]);
-    }
+    // Update state directly
+    setPets(prevPets => [...prevPets, newPet]);
   };
 
   const addVaccination = (vaccinationData: Omit<Vaccination, 'id' | 'reminderSent'>) => {
@@ -223,17 +256,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       reminderSent: false
     };
 
-    // Add to database
-    if (db.addVaccination(vaccinationData.petId, newVaccination)) {
-      // Update state
-      setPets(prevPets => 
-        prevPets.map(pet => 
-          pet.id === vaccinationData.petId 
-            ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
-            : pet
-        )
-      );
-    }
+    // Update state directly
+    setPets(prevPets => 
+      prevPets.map(pet => 
+        pet.id === vaccinationData.petId 
+          ? { ...pet, vaccinations: [...pet.vaccinations, newVaccination] }
+          : pet
+      )
+    );
   };
 
   const updateVaccinationReminder = (vaccinationId: string, petId: string) => {
@@ -245,10 +275,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const vaccination = pet.vaccinations.find(v => v.id === vaccinationId);
     if (!vaccination) return;
     
-    // Update in database
-    db.updateVaccination(petId, vaccinationId, { reminderSent: true });
-    
-    // Update state
+    // Update state directly
     setPets(prevPets => 
       prevPets.map(pet => ({
         ...pet,
