@@ -20,34 +20,97 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Check if localStorage is available
+const isLocalStorageAvailable = () => {
+  try {
+    const testKey = '__localStorage_test__';
+    localStorage.setItem(testKey, testKey);
+    localStorage.removeItem(testKey);
+    return true;
+  } catch (e) {
+    console.error('localStorage is not available:', e);
+    return false;
+  }
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Add fallback data for cases where localStorage is unavailable
+  const fallbackToMockData = () => {
+    console.log('Falling back to mock data because localStorage is unavailable');
+    // Create some basic sample data
+    const sampleOwners: Owner[] = [
+      {
+        id: 'owner-1',
+        name: 'John Smith',
+        email: 'john@example.com',
+        phone: '555-123-4567',
+        address: '123 Main St, Anytown, USA'
+      }
+    ];
+    
+    const samplePets: Pet[] = [
+      {
+        id: 'pet-1',
+        ownerId: 'owner-1',
+        name: 'Max',
+        species: 'Dog',
+        breed: 'Golden Retriever',
+        age: 5,
+        weight: 70,
+        vaccinations: []
+      }
+    ];
+    
+    setOwners(sampleOwners);
+    setPets(samplePets);
+    setIsInitialized(true);
+    setIsLoading(false);
+    console.log('Mock data loaded successfully');
+  };
 
   // Load initial data - removed from useEffect to avoid re-fetching
   const loadData = () => {
-    console.log('Loading data from db...');
+    console.log('Loading data from db...', { isInitialized, isLoading });
+    
+    // Check localStorage availability
+    if (!isLocalStorageAvailable()) {
+      console.warn('localStorage is not available - using fallback data');
+      fallbackToMockData();
+      return;
+    }
+    
     try {
       // Initialize database if needed
       if (!db.isInitialized()) {
         console.log('Initializing database with sample data...');
         db.initialize();
+        console.log('Database initialization complete');
+      } else {
+        console.log('Database already initialized');
       }
 
       // Load data
-      setOwners(db.getOwners());
-      setPets(db.getPets());
+      const ownersData = db.getOwners();
+      const petsData = db.getPets();
+      console.log('Data loaded:', { ownersCount: ownersData.length, petsCount: petsData.length });
+      
+      setOwners(ownersData);
+      setPets(petsData);
       setIsInitialized(true);
       setIsLoading(false);
-      console.log('Data loaded successfully');
+      console.log('State updated, loading complete:', { isInitialized: true, isLoading: false });
     } catch (error) {
       console.error('Error loading data:', error);
       // Still mark as initialized to avoid infinite loops
       setIsInitialized(true);
       setIsLoading(false);
+      console.log('Error state updated:', { isInitialized: true, isLoading: false });
     }
   };
 
