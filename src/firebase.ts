@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, enableIndexedDbPersistence } from 'firebase/firestore';
 import { Owner, Pet } from './types';
 
 // Your web app's Firebase configuration
@@ -16,7 +16,23 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firestore
 const db = getFirestore(app);
+
+// Enable offline persistence - handles connection issues better
+enableIndexedDbPersistence(db)
+  .then(() => {
+    console.log("Persistence enabled successfully");
+  })
+  .catch((err) => {
+    console.error("Error enabling persistence:", err);
+    if (err.code === 'failed-precondition') {
+      console.log('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+    } else if (err.code === 'unimplemented') {
+      console.log('The current browser does not support all of the features required to enable persistence');
+    }
+  });
 
 // Collection references
 const ownersCollection = collection(db, 'owners');
@@ -143,28 +159,26 @@ export const firebaseService = {
         lastMonth.setMonth(today.getMonth() - 1);
         
         // Define explicit types for sample data
-        type SampleVaccination = {
-          id: string;
-          type: string;
-          dateAdministered: string;
-          nextDueDate: string;
-          reminderInterval: string;
-          notes: string;
-          reminderSent: boolean;
-        };
-        
-        type SamplePet = {
+        type SimplePet = {
           ownerId: string;
           name: string;
           species: string;
           breed: string;
           age: number;
           weight: number;
-          vaccinations: SampleVaccination[];
+          vaccinations: Array<{
+            id: string;
+            type: string;
+            dateAdministered: string;
+            nextDueDate: string;
+            reminderInterval: string;
+            notes: string;
+            reminderSent: boolean;
+          }>;
         };
         
         // Sample pets with vaccinations
-        const samplePets: SamplePet[] = [
+        const samplePets: SimplePet[] = [
           {
             ownerId: ownerRefs[0].id,
             name: 'Max',
