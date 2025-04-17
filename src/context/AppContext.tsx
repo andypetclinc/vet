@@ -15,6 +15,7 @@ interface AppContextType {
   setSearchTerm: (term: string) => void;
   sendNotification: (vaccination: Vaccination) => Promise<boolean>;
   refreshData: () => void;
+  isLoading: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -24,29 +25,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [pets, setPets] = useState<Pet[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load initial data
+  // Load initial data - removed from useEffect to avoid re-fetching
   const loadData = () => {
-    setOwners(db.getOwners());
-    setPets(db.getPets());
-    setIsInitialized(true);
+    console.log('Loading data from db...');
+    try {
+      // Initialize database if needed
+      if (!db.isInitialized()) {
+        console.log('Initializing database with sample data...');
+        db.initialize();
+      }
+
+      // Load data
+      setOwners(db.getOwners());
+      setPets(db.getPets());
+      setIsInitialized(true);
+      setIsLoading(false);
+      console.log('Data loaded successfully');
+    } catch (error) {
+      console.error('Error loading data:', error);
+      // Still mark as initialized to avoid infinite loops
+      setIsInitialized(true);
+      setIsLoading(false);
+    }
   };
 
-  // Load data on component mount
+  // Load data on component mount - only once
   useEffect(() => {
+    console.log('AppProvider mounted, loading data...');
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Function to refresh data from the database
   const refreshData = () => {
+    console.log('Refreshing data...');
     loadData();
   };
 
-  // Check for vaccinations that need reminders
+  // Check for vaccinations that need reminders - only run when data is initialized
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isLoading) {
+      console.log('Skipping reminder check until initialization is complete');
+      return;
+    }
 
+    console.log('Setting up vaccination reminders check');
     const checkForReminders = () => {
+      console.log('Checking for vaccinations needing reminders...');
       const today = new Date();
       const threeDaysFromNow = new Date(today);
       threeDaysFromNow.setDate(today.getDate() + 3);
@@ -67,6 +94,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       // Send reminders
+      if (remindersToSend.length > 0) {
+        console.log(`Found ${remindersToSend.length} vaccinations needing reminders`);
+      }
+      
       remindersToSend.forEach(async (vaccination) => {
         const success = await sendNotification(vaccination);
         if (success) {
@@ -77,11 +108,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // Check for reminders initially and then every day
+    console.log('Running initial reminder check');
     checkForReminders();
+    
+    console.log('Setting up daily reminder check');
     const interval = setInterval(checkForReminders, 24 * 60 * 60 * 1000);
 
-    return () => clearInterval(interval);
-  }, [isInitialized, pets]);
+    return () => {
+      console.log('Cleaning up reminder interval');
+      clearInterval(interval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInitialized, isLoading]);
 
   const addOwner = (ownerData: Omit<Owner, 'id'>) => {
     const newOwner: Owner = {
@@ -227,7 +265,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         searchTerm,
         setSearchTerm,
         sendNotification,
-        refreshData
+        refreshData,
+        isLoading
       }}
     >
       {children}
