@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { Owner, Pet, Vaccination } from './types';
+import { Owner, Pet } from './types';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -143,7 +143,8 @@ export const firebaseService = {
         lastMonth.setMonth(today.getMonth() - 1);
         
         // Sample pets with vaccinations
-        interface TempVaccination {
+        // Use a simplified type without the petId to avoid type conflicts  
+        interface VaccinationSeedData {
           id: string;
           type: string;
           dateAdministered: string;
@@ -153,11 +154,18 @@ export const firebaseService = {
           reminderSent: boolean;
         }
 
-        type PetWithTempVaccinations = Omit<Pet, 'id' | 'vaccinations'> & { 
-          vaccinations: TempVaccination[] 
-        };
-        
-        const samplePets: PetWithTempVaccinations[] = [
+        // Pet type with the simplified vaccination data
+        interface PetSeedData {
+          ownerId: string;
+          name: string;
+          species: string;
+          breed: string;
+          age: number;
+          weight: number;
+          vaccinations: VaccinationSeedData[];
+        }
+
+        const samplePets: PetSeedData[] = [
           {
             ownerId: ownerRefs[0].id,
             name: 'Max',
