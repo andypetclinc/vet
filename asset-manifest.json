@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/vet/static/css/main.707b7022.css",
+    "main.js": "/vet/static/js/main.fb5f393a.js",
+    "index.html": "/vet/index.html",
+    "main.707b7022.css.map": "/vet/static/css/main.707b7022.css.map",
+    "main.fb5f393a.js.map": "/vet/static/js/main.fb5f393a.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.707b7022.css",
+    "static/js/main.fb5f393a.js"
+  ]
+}
