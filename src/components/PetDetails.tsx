@@ -18,14 +18,8 @@ const PetDetails: React.FC<PetDetailsProps> = ({ petId, onClose }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-lg p-4 sm:p-6 max-w-4xl w-full my-4 sm:my-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
+        <div className="mb-6">
           <h2 className="text-xl sm:text-2xl font-bold">{pet.name}</h2>
-          <button 
-            onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md transition-colors duration-200"
-          >
-            Back to Dashboard
-          </button>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
