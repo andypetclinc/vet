@@ -5,13 +5,13 @@ import { Owner, Pet, Vaccination } from './types';
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDaHs_D4ij8t1mCGMlAVh6SQXIGiBioXMk",
-  authDomain: "andys-pet-clinic.firebaseapp.com",
-  projectId: "andys-pet-clinic",
-  storageBucket: "andys-pet-clinic.appspot.com",
-  messagingSenderId: "663170116685",
-  appId: "1:663170116685:web:1a72eee7c0a78ac7d0bf1f",
-  measurementId: "G-NQ2VGVEZQL"
+    apiKey: "AIzaSyBkvgsWfGFX0XmDRFGcTrTWVgAqj3kvmUA",
+    authDomain: "vet-app-58ab5.firebaseapp.com",
+    projectId: "vet-app-58ab5",
+    storageBucket: "vet-app-58ab5.firebasestorage.app",
+    messagingSenderId: "18920633034",
+    appId: "1:18920633034:web:e6a4de927c9767e991ba33",
+    measurementId: "G-T94P0K0BT6"
 };
 
 // Initialize Firebase
